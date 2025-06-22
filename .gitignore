@@ -1,0 +1,14 @@
+
+# Folders to ignore with git
+/.buildozer
+/android-binaries
+/audio_files
+/bin
+/data
+/ffmpeg-android
+/songs/*
+/soundapp
+
+# Files to ignore
+output.mp3
+temp.wav

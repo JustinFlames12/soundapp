@@ -1,0 +1,163 @@
+#:import dp kivy.metrics.dp
+
+<RootWidget>:
+    orientation: "vertical"
+    padding: dp(10)
+    spacing: dp(10)
+
+    # Set the background color according to the current theme.
+    canvas.before:
+        Color:
+            rgba: app.background_color
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    # Header with app title and a button to toggle themes.
+    BoxLayout:
+        size_hint_y: None
+        height: dp(50)
+        spacing: dp(10)
+        Label:
+            text: "Guess That Song"
+            font_size: dp(24)
+            halign: "left"
+        Button:
+            text: "Toggle Theme"
+            size_hint_x: None
+            width: dp(120)
+            on_press: app.toggle_theme()
+
+    # Row of 12 radio buttons (using ToggleButton and a shared group).
+    BoxLayout:
+        # orientation: "horizontal"
+        # size_hint_y: None
+        # height: dp(50)
+        # spacing: dp(5)
+        # ToggleButton:
+        #     text: "1"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "2"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "3"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "4"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "5"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "6"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "7"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "8"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "9"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "10"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "11"
+        #     group: "numbers"
+        # ToggleButton:
+        #     text: "12"
+        #     group: "numbers"
+        orientation: "vertical"
+        spacing: dp(5)
+        size_hint_y: None
+        height: dp(100)
+        Label:
+            text: "Pitch (Semitone) " + str(sliderA.value)
+            size_hint_y: None
+            height: dp(30)
+        Slider:
+            id: sliderA
+            min: -12
+            max: 12
+            value: 0
+            step: 1
+
+
+    # First Slider: Goes from 0.75 to 1.5 with default value 1 and a step of 0.05.
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(5)
+        size_hint_y: None
+        height: dp(100)
+        Label:
+            text: "Tempo: " + str(slider1.value)
+            size_hint_y: None
+            height: dp(30)
+        Slider:
+            id: slider1
+            min: 0.75
+            max: 1.5
+            value: 1
+            step: 0.05
+
+    # Second Slider: Goes from 0 to 12 with default value 0 and a step of 1.
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(5)
+        size_hint_y: None
+        height: dp(100)
+        Label:
+            text: "Difficulty: " + str(slider2.value)
+            size_hint_y: None
+            height: dp(30)
+        Slider:
+            id: slider2
+            min: 0
+            max: 12
+            value: 0
+            step: 1
+
+    BoxLayout:
+        size_hint_y: None
+        height: dp(50)
+        spacing: dp(10)
+        orientation: "horizontal"
+        # Dropdown (Spinner) with 3 selections. The default text prompts the user.
+        Spinner:
+            id: dropdown
+            text: "Select Playlist"
+            values: ["Hymns", "Nursery Rhymes", "Option 3"]
+            size_hint_y: None
+            height: dp(44)
+
+        Button:
+            text: "View Playlist"
+    # Row of media control buttons.
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_y: None
+        height: dp(50)
+        spacing: dp(10)
+        Button:
+            text: "Play"
+        Button:
+            text: "Pause"
+        Button:
+            text: "Restart"
+
+    # Textbox for the user’s guess with a placeholder.
+    TextInput:
+        id: guess_input
+        hint_text: "Place your guess here"
+        multiline: False
+        size_hint_y: None
+        height: dp(40)
+
+    # Submit Button.
+    Button:
+        text: "Submit"
+        size_hint_y: None
+        height: dp(50)

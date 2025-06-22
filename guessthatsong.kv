@@ -1,0 +1,275 @@
+#:import dp kivy.metrics.dp
+
+<MyScreenManager>:
+    MainScreen:
+    PlaylistScreen:
+    UploadScreen:
+    ScoreScreen:
+
+<MainScreen>:
+    name: "main"
+
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(10)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: app.background_color
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        # Header with app title and toggle theme button.
+        BoxLayout:
+            size_hint_y: None
+            height: dp(50)
+            spacing: dp(10)
+            Label:
+                text: "Guess That Song"
+                font_size: dp(24)
+                halign: "left"
+            Button:
+                text: "Toggle Theme"
+                size_hint_x: None
+                width: dp(120)
+                on_press: app.toggle_theme()
+
+        # Row for Pitch Slider
+        BoxLayout:
+            orientation: "vertical"
+            spacing: dp(5)
+            size_hint_y: None
+            height: dp(100)
+            Label:
+                text: "Pitch (Semitone) " + str(sliderA.value)
+                size_hint_y: None
+                height: dp(30)
+            Slider:
+                id: sliderA
+                min: -12
+                max: 12
+                value: 0
+                step: 1
+
+        # Tempo slider section
+        BoxLayout:
+            orientation: "vertical"
+            spacing: dp(5)
+            size_hint_y: None
+            height: dp(100)
+            Label:
+                text: "Tempo: " + str(slider1.value)
+                size_hint_y: None
+                height: dp(30)
+            Slider:
+                id: slider1
+                min: 0.75
+                max: 1.5
+                value: 1
+                step: 0.05
+
+        # Difficulty slider section
+        BoxLayout:
+            orientation: "vertical"
+            spacing: dp(5)
+            size_hint_y: None
+            height: dp(100)
+            Label:
+                text: "Difficulty: " + str(slider2.value)
+                size_hint_y: None
+                height: dp(30)
+            Slider:
+                id: slider2
+                min: 0
+                max: 12
+                value: 0
+                step: 1
+
+        # Dropdown and View Playlist button row
+        BoxLayout:
+            size_hint_y: None
+            height: dp(50)
+            spacing: dp(10)
+            orientation: "horizontal"
+            Spinner:
+                id: dropdown
+                text: "Select Playlist"
+                values: ["Hymns", "Nursery Rhymes", "Custom"]
+                size_hint_y: None
+                height: dp(44)
+                on_text: if dropdown.text != "Select Playlist": root.toggle_view_playlist()
+            Button:
+                id: view_playlist
+                text: "View Playlist"
+                on_press: root.manager.current = "playlist"
+                disabled: root.view_playlist_condition
+
+        # Row of media control buttons.
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: None
+            height: dp(50)
+            spacing: dp(10)
+            Button:
+                id: playbtn
+                text: "Play"
+                on_press: root.play_random_song()
+                disabled: root.view_playlist_condition
+            Button:
+                id: pausebtn
+                text: "Pause"
+                disabled: True
+                on_press: root.pause_song()
+            Button:
+                id: restartbtn
+                text: "Restart"
+                disabled: True
+                on_press: root.restart_song()
+
+        # TextInput for the guess.
+        TextInput:
+            id: guess_input
+            hint_text: "Place your guess here"
+            multiline: False
+            size_hint_y: None
+            height: dp(40)
+
+        # Submit button to switch to the playlist screen.
+        Button:
+            text: "Submit"
+            size_hint_y: None
+            height: dp(50)
+            on_press: root.manager.current = "score"; app.root.get_screen("score").getscore()
+
+
+<PlaylistScreen>:
+    name: "playlist"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(10)
+        padding: dp(10)
+        canvas.before:
+            Color:
+                rgba: app.background_color
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        Label:
+            text: "Playlist"
+            font_size: dp(24)
+            size_hint_y: None
+            height: dp(50)
+
+        RecycleView:
+            id: playlist_rv
+            viewclass: "SongItem"
+            # The RecycleBoxLayout arranges items vertically.
+            RecycleBoxLayout:
+                default_size: None, dp(40)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
+
+        BoxLayout:
+            orientation: "horizontal"
+            Button:
+                text: "Add New Song"
+                size_hint_y: None
+                height: dp(50)
+                on_press: root.add_song()
+                # on_press: root.manager.current = "upload"
+
+            Button:
+                text: "Back"
+                size_hint_y: None
+                height: dp(50)
+                on_press: root.manager.current = "main"
+        
+<UploadScreen>:
+    name: "upload"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(10)
+        padding: dp(10)
+        canvas.before:
+            Color:
+                rgba: app.background_color
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+            text: "Upload Audio File"
+            font_size: dp(24)
+            size_hint_y: None
+            height: dp(50)
+        Label:
+            id: filechooserlabel
+            text: "File Selected: "
+            font_size: dp(12)
+            size_hint_y: None
+            height: dp(25)
+        FileChooserListView:
+            id: filechooser
+            path: '.'
+            on_selection: filechooserlabel.text = self.selection and self.selection[0] or ''
+        BoxLayout:
+            orientation: "horizontal"
+            Button:
+                text: "Upload Audio File"
+                size_hint_y: None
+                height: dp(50)
+                on_press: root.upload_file()
+            Button:
+                text: "Back"
+                size_hint_y: None
+                height: dp(50)
+                on_press: root.manager.current = "playlist"
+
+<ScoreScreen>:
+    name: "score"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(10)
+        padding: dp(10)
+        canvas.before:
+            Color:
+                rgba: app.background_color
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+            text: "Results"
+            font_size: dp(24)
+            size_hint_y: None
+            height: dp(50)
+        Label:
+            id: scorelabel
+            text: "No score available"
+            font_size: dp(24)
+            size_hint_y: None
+            height: dp(50)
+        BoxLayout:
+            orientation: "horizontal"
+            Button:
+                text: "Back"
+                size_hint_y: None
+                height: dp(50)
+                on_press: root.manager.current = "main"
+
+<SongItem>:
+    orientation: "horizontal"
+    size_hint_y: None
+    height: dp(40)
+    Label:
+        text: root.song_name
+        halign: "left"
+        valign: "middle"
+        text_size: self.size
+    Button:
+        text: "Delete"
+        size_hint_x: None
+        width: dp(80)
+        on_press: app.root.get_screen('playlist').remove_song(root.song_name)
