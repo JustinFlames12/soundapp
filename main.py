@@ -3,6 +3,10 @@ from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.boxlayout import BoxLayout
 from kivy.properties import StringProperty, ListProperty
 from kivy.clock import Clock
+from kivy.uix.popup import Popup 
+from kivy.uix.button import Button
+from kivy.uix.label import Label
+from kivy.uix.scrollview import ScrollView
 import os
 import shutil
 from random import randint
@@ -12,7 +16,7 @@ import numpy as np
 import subprocess
 
 from pydub import AudioSegment
-# import wave
+import wave
 # import pyaudio
 import random
 from difflib import SequenceMatcher
@@ -25,11 +29,44 @@ from plyer import filechooser, audio
 # from audiostream.core import AudioSample
 # from ffpyplayer.player import MediaPlayer
 from kivy.core.audio import SoundLoader
+import time
+# import psutil
 
 
 if platform == "android":
     from android.storage import app_storage_path
-    from jnius import autoclass
+    from jnius import autoclass, PythonJavaClass, java_method
+
+    print("Changing permissions for FFMPEG")
+    import os, stat
+    ffmpeg_path = "ffmpeg-android"  # update with your actual path
+    os.chmod(ffmpeg_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # equivalent to 0o755
+    print("Done with: ffmpeg-android")
+    print(os.getcwd())
+    ffmpeg_path = "./soundapp/Lib/site-packages/ffmpeg"  # update with your actual path
+    os.chmod(ffmpeg_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # equivalent to 0o755
+    print("Done with: ffmpeg")
+
+
+    # Define a Python class that implements the Java OnCompletionListener interface
+    class OnCompletionListener(PythonJavaClass):
+        __javainterfaces__ = ['android/media/MediaPlayer$OnCompletionListener']
+        __javacontext__ = 'app'
+
+        @java_method('(Landroid/media/MediaPlayer;)V')
+        def onCompletion(self, mp):
+            print("Playback completed!")
+            # main_screen = MainScreen(name='main')
+            # main_screen.on_song_end()
+            Clock.schedule_once(self.run_on_main_thread)
+
+        def run_on_main_thread(self, dt):
+            # Assuming you already have a reference to your MainScreen instance
+            # You should NOT create a new one here
+            app = App.get_running_app()
+            main_screen = app.root.get_screen('main')
+            main_screen.on_song_end_android()
+            print('Playback modification completed!')
 
     # Get app storage path
     app_path = app_storage_path()
@@ -47,12 +84,21 @@ if platform == "android":
 
 import soundfile as sf
 
+class WrappedLabel(Label):
+    # Based on Tshirtman's answer
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bind(
+            width=lambda *x:
+            self.setter('text_size')(self, (self.width, None)),
+            texture_size=lambda *x: self.setter('height')(self, self.texture_size[1]))
 
 class SongItem(BoxLayout):
     song_name = StringProperty("")
 
 class RootWidget(BoxLayout):
     pass
+
 
 class MainScreen(Screen):
     song_selected = False
@@ -68,8 +114,18 @@ class MainScreen(Screen):
 
     def play_random_song(self):
         print(f'Song selected: {self.song_selected}')
+
+        # Disable sliders and dropdown
+        self.ids.sliderA.disabled = True
+        self.ids.slider1.disabled = True
+        self.ids.slider2.disabled = True
+
         if self.song_selected == False:
+            # Reset sound variable
+            self.sound = None
+
             self.ids.playbtn.disabled = True
+            self.ids.submitbtn.disabled = False
             # self.ids.pausebtn.disabled = False
             # self.ids.restartbtn.disabled = False
             dropdown_text = self.ids.dropdown.text
@@ -78,16 +134,49 @@ class MainScreen(Screen):
             os.chdir(dropdown_text)
             # if 'temp.wav' in os.listdir():
             #     os.remove('temp.wav')
-            if 'temp.mp3' in os.listdir():
-                os.remove('temp.mp3')
-            list_songs = [song for song in os.listdir()]
+            for _ in range(5):
+                try:
+                    if 'temp.mp3' in os.listdir():
+                        os.remove('temp.mp3')
+                    elif 'temp.m4a' in os.listdir():
+                        os.remove('temp.m4a')
+                    # elif 'temp.wav' in os.listdir():
+                    #     os.remove('temp.wav')
+                    break
+                except PermissionError as e:
+                    print(f"Permission Error (will try again): {e}")
+                    time.sleep(0.5)
+            
+            list_songs = [song for song in os.listdir() if song != 'temp.wav' or song != 'temp_original.wav']
             random_song = randint(0, len(list_songs) - 1)
             print(f'Song: {list_songs[random_song]}')
             print(f'Tempo: {self.ids.slider1.value}')
             print(f'Pitch: {self.ids.sliderA.value}')
             print(f'Level of difficulty: {self.ids.slider2.value}')
-            # Clock.schedule_once(lambda dt: self.change_audio_properties(list_songs[random_song], f'{list_songs[random_song]}_{self.ids.slider1.value}_{self.ids.sliderA.value}_{self.ids.slider2.value}.mp3', self.ids.slider1.value, self.ids.sliderA.value, self.ids.slider2.value, True), 0.1)
-            Clock.schedule_once(lambda dt: self.change_audio_properties(list_songs[random_song], f'{list_songs[random_song]}', self.ids.slider1.value, self.ids.sliderA.value, self.ids.slider2.value), 0.1)
+
+            try:
+                # Clock.schedule_once(lambda dt: self.change_audio_properties(list_songs[random_song], f'{list_songs[random_song]}_{self.ids.slider1.value}_{self.ids.sliderA.value}_{self.ids.slider2.value}.mp3', self.ids.slider1.value, self.ids.sliderA.value, self.ids.slider2.value, True), 0.1)
+                Clock.schedule_once(lambda dt: self.change_audio_properties(list_songs[random_song], f'{list_songs[random_song]}', self.ids.slider1.value, self.ids.sliderA.value, self.ids.slider2.value), 0.1)
+            except Exception as e:
+                content = BoxLayout(orientation='vertical')
+                popup = Popup(title='ERROR', 
+                            content=content)
+                scroll_error_1 = ScrollView(size_hint=(1, 0.8))
+                scroll_error_1.add_widget(WrappedLabel(text = f"Unable to play song. Please try again.\nError message: {e}", size_hint=(1, None)))
+                content.add_widget(scroll_error_1)
+                error_btn_1 = Button(text='OK', on_press=popup.dismiss, size_hint_y=0.2)
+                content.add_widget(error_btn_1)
+                popup.open()
+
+                # Reset after exception occurs
+                self.ids.playbtn.disabled = False
+                self.ids.submitbtn.disabled = True
+                self.ids.sliderA.disabled = False
+                self.ids.slider1.disabled = False
+                self.ids.slider2.disabled = False
+
+                os.chdir('..')
+                os.chdir('..')
             # self.change_audio_properties(list_songs[random_song], f'{list_songs[random_song]}_{self.ids.slider1.value}_{self.ids.sliderA.value}_{self.ids.slider2.value}.mp3', self.ids.slider1.value, self.ids.sliderA.value, 0, True)
             # os.remove("temp.wav")
 
@@ -118,10 +207,54 @@ class MainScreen(Screen):
         x_new = np.linspace(0, 1, int(len(y) * factor))
         return np.interp(x_new, x_old, y)
 
-    def pitch_shift(self, y: np.ndarray, semitones: float) -> np.ndarray:
-        rate = 2 ** (semitones / 12)
-        y_shifted = self.resample_audio(y, 1 / rate)
-        return y_shifted
+    # def pitch_shift(self, y: np.ndarray, semitones: float) -> np.ndarray:
+    #     rate = 2 ** (semitones / 12)
+    #     y_shifted = self.resample_audio(y, 1 / rate)
+    #     return y_shifted
+    def pitch_shift(self, input_wav, output_wav, semitone_shift):
+        from pysoundtouch import SoundTouch
+        # Calculate the pitch factor based on semitones.
+        # Shifting by n semitones corresponds to a factor of 2^(n/12)
+        pitch_factor = 2 ** (semitone_shift / 12.0)
+
+        # Open the input WAV file.
+        with wave.open(input_wav, 'rb') as wf:
+            channels = wf.getnchannels()
+            sample_rate = wf.getframerate()
+            sample_width = wf.getsampwidth()
+            n_frames = wf.getnframes()
+            audio_frames = wf.readframes(n_frames)
+
+        # Convert the byte data to a NumPy array.
+        # This example assumes a 16-bit PCM file.
+        audio_data = np.frombuffer(audio_frames, dtype=np.int16)
+
+        # Initialize the SoundTouch object.
+        # It processes the audio without changing the overall duration.
+        with SoundTouch(sample_rate, channels) as st:
+            st.set_pitch(pitch_factor)  # Change pitch without affecting speed.
+            st.put_samples(audio_data)
+            st.flush()  # Make sure to process any buffered data.
+
+            # Retrieve the processed samples in chunks.
+            processed = []
+            while True:
+                chunk = st.receive_samples(4096)
+                if chunk.size == 0:
+                    break
+                processed.append(chunk)
+            if processed:
+                processed_audio = np.concatenate(processed)
+            else:
+                processed_audio = audio_data  # Fallback: no change if nothing retrieved.
+
+        # Write the processed audio to the output file.
+        with wave.open(output_wav, 'wb') as wf_out:
+            wf_out.setnchannels(channels)
+            wf_out.setsampwidth(sample_width)
+            wf_out.setframerate(sample_rate)
+            wf_out.writeframes(processed_audio.tobytes())
+
 
     def time_stretch(self, y: np.ndarray, factor: float) -> np.ndarray:
         return self.resample_audio(y, factor)
@@ -136,6 +269,121 @@ class MainScreen(Screen):
             return None
         midi = int(round(69 + 12 * np.log2(f0 / 440.0)))
         return midi % 12
+    
+    def hann_window(self, n):
+        """Pure-Python Hann window of length n."""
+        return 0.5 - 0.5 * np.cos(2*np.pi * np.arange(n) / (n-1))
+
+    def stft(self, y, n_fft=2048, hop_length=None):
+        """
+        Compute STFT (complex) of 1D signal y.
+        Returns (D, hop_length) where
+        D: shape (n_fft, n_frames)
+        hop_length: hop size in samples
+        """
+        hop_length = hop_length or n_fft // 4
+        # reflect-pad so windows center at t=0 and t=end
+        y = np.pad(y, n_fft//2, mode='reflect')
+        n_frames = 1 + (len(y) - n_fft) // hop_length
+        # build a strided 2D array of frames
+        frames = np.lib.stride_tricks.as_strided(
+            y,
+            shape=(n_frames, n_fft),
+            strides=(hop_length*y.strides[0], y.strides[0])
+        )
+        # apply window and FFT
+        win = self.hann_window(n_fft)
+        D = np.fft.rfft(frames * win, axis=1).T
+        return D, hop_length
+
+    def istft(self, D, hop_length, length=None):
+        """
+        Inverse STFT returning real signal.
+        D: shape (n_freq_bins, n_frames) complex
+        hop_length: hop size used in forward STFT
+        length: optional final length to trim/pad to
+        """
+        n_bins, n_frames = D.shape
+        n_fft = (n_bins - 1) * 2
+        win = self.hann_window(n_fft)
+        # ifft -> time frames
+        frames = np.fft.irfft(D.T, axis=1)
+        # overlap-add
+        y = np.zeros(n_fft + hop_length*(n_frames-1))
+        wsum = np.zeros_like(y)
+        for i in range(n_frames):
+            start = i * hop_length
+            y[start:start+n_fft]   += frames[i] * win
+            wsum[start:start+n_fft] += win**2
+        # normalize by window-squared sum
+        nonzero = wsum > 1e-8
+        y[nonzero] /= wsum[nonzero]
+        # remove padding
+        y = y[n_fft//2 : -n_fft//2]
+        if length is not None:
+            y = y[:length]
+        return y
+
+    def phase_vocoder(self, D, rate, hop_length):
+        """
+        Time-stretch D by factor rate with a basic phase-vocoder.
+        rate > 1 → speed up (shorter), rate < 1 → slow down (longer).
+        """
+        n_bins, n_steps = D.shape
+        # new time positions
+        time_steps = np.arange(0, n_steps, rate, dtype=np.float64)
+        n_stretch = len(time_steps)
+        D_stretch = np.zeros((n_bins, n_stretch), dtype=np.complex128)
+
+        # initialize phases
+        phase_acc = np.angle(D[:, 0])
+        last_phase = phase_acc.copy()
+        # expected phase advance per bin per hop
+        omega = 2 * np.pi * hop_length * np.arange(n_bins) / n_bins
+
+        for i, t in enumerate(time_steps):
+            left = int(np.floor(t))
+            right = min(left + 1, n_steps - 1)
+            alpha = t - left
+            # magnitude interpolation
+            mag = (1 - alpha) * np.abs(D[:, left]) + alpha * np.abs(D[:, right])
+            # phase difference
+            delta = np.angle(D[:, right]) - np.angle(D[:, left])
+            delta = delta - 2*np.pi * np.round(delta / (2*np.pi))
+            # true phase advance
+            delta = delta + omega
+            phase_acc += delta
+            D_stretch[:, i] = mag * np.exp(1j * phase_acc)
+
+        return D_stretch
+
+    def time_stretch_5(self, y, rate, n_fft=2048, hop_length=None):
+        """Stretch audio y by factor rate using pure-NumPy phase vocoder."""
+        D, hop = self.stft(y, n_fft=n_fft, hop_length=hop_length)
+        D_st = self.phase_vocoder(D, rate, hop)
+        return self.istft(D_st, hop)
+
+    def pitch_shift(self, y, sr, n_steps):
+        """
+        Shift pitch by n_steps semitones (–12..+12)
+        without altering the duration.
+        """
+        # 1) compute semitone ratio
+        factor = 2.0 ** (n_steps / 12.0)
+
+        # 2) time-stretch by inverse ratio
+        y_st = self.time_stretch_5(y, rate=1.0/factor)
+
+        # 3) resample back to original length
+        #    → ensures len(y_shifted) == len(y)
+        orig_len = len(y)
+        y_shifted = np.interp(
+            np.linspace(0, len(y_st)-1, orig_len),
+            np.arange(len(y_st)),
+            y_st
+        ).astype(y.dtype)
+
+        return y_shifted
 
     def change_audio_properties(
         self, audio_path, output_path,
@@ -146,7 +394,7 @@ class MainScreen(Screen):
             y = y.mean(axis=1)
 
         # Apply pitch shift
-        y = self.pitch_shift(y, pitch_semitones)
+        # y = self.pitch_shift(y, pitch_semitones)
         # Apply tempo stretch
         # y = self.time_stretch(y, tempo_factor)
 
@@ -167,10 +415,107 @@ class MainScreen(Screen):
         # sf.write(temp_wav, out, sr)
         # AudioSegment.from_wav(temp_wav).export(output_path, format="mp3")
 
-
         # 6) Write final WAV and convert to MP3
         tmp2 = "temp.wav"
         sf.write(tmp2, out, sr)
+        chosen_uuid = uuid.uuid4()
+
+        # Change tempo of song if necessary
+        if tempo_factor != 1.0:
+            shutil.copy('temp.wav', 'temp_original.wav')
+            from audiotsm import phasevocoder
+            from audiotsm.io.wav import WavReader, WavWriter
+
+            input_path = 'temp_original.wav'
+            output_path = "temp.wav"
+
+            with WavReader(input_path) as reader:
+                with WavWriter(output_path, reader.channels, reader.samplerate) as writer:
+                    tsm = phasevocoder(reader.channels, speed=tempo_factor)
+                    tsm.run(reader, writer)
+
+
+            # Check if the file exists before attempting to remove it
+            if os.path.exists(input_path):
+                os.remove(input_path)
+
+        # # Change pitch of song if necessary
+        # if pitch_semitones != 0.0:
+        #     input_path = 'temp_original.wav'
+        #     shutil.copy(tmp2, input_path)
+        #     self.pitch_shift(input_path, tmp2, semitone_shift=int(pitch_semitones))
+        #     # Check if the file exists before attempting to remove it
+        #     if os.path.exists(input_path):
+        #         os.remove(input_path)
+
+        if pitch_semitones != 0.0:
+            shutil.copy('temp.wav', 'temp_original.wav')
+            # # # Check if the file exists before attempting to remove it
+            # # if os.path.exists("temp.wav"):
+            # #     os.remove("temp.wav")
+            # # # Build the filter string. For example, for 4 semitones:
+            # # filter_str = f"asetrate=44100*2^({int(pitch_semitones)}/12),aresample=44100"
+            # # proc = subprocess.Popen([
+            # #     "ffmpeg", "-i", "temp_original.wav",
+            # #     "-filter:a", filter_str,
+            # #     f"temp.wav"
+            # # ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # # # This waits for the process to complete
+            # # stdout, stderr = proc.communicate()
+
+            # # shutil.copy(f"temp_{chosen_uuid}.wav", 'temp.wav')
+            # # # Check if the file exists before attempting to remove it
+
+            # if platform != "android":
+            #     import ffmpeg
+            #     # Settings
+            #     input_file = 'temp_original.wav'
+            #     output_file = 'temp.wav'
+            #     semitones = int(pitch_semitones)
+            #     sample_rate = 44100
+
+            #     # Construct the filter.
+            #     # asetrate changes the pitch by adjusting the rate: multiplying by 2^(semitones/12)
+            #     # aresample brings the audio back to the original sample rate.
+            #     filter_str = f"asetrate={sample_rate}*2^({semitones}/12),aresample={sample_rate}"
+
+            #     # Construct and run the FFmpeg command using ffmpeg-python
+            #     (
+            #         ffmpeg
+            #         .input(input_file)
+            #         .output(output_file, af=filter_str, format='wav')
+            #         .overwrite_output()
+            #         .run()
+            #     )
+            # else:
+            #     from jnius import autoclass
+
+            #     # Import the FFmpegKit class from the FFmpegKit library.
+            #     FFmpegKit = autoclass('com.arthenica.ffmpegkit.FFmpegKit')
+
+            #     command = (
+            #         f"-i {input_file}"  # Input file
+            #         f"-filter:a \"asetrate=44100*2^({int(pitch_semitones)}/12),aresample=44100\" "  # Filter chain: shift pitch while maintaining duration
+            #         f"{output_file}"  # Output file
+            #     )
+
+            #     # Execute the command using FFmpegKit
+            #     session = FFmpegKit.execute(command)
+            #     resultCode = session.getReturnCode().getValue()  # Numeric return code
+            #     print("Pitch shift command finished with code:", resultCode)
+
+            wav, sr = sf.read('temp_original.wav')
+            out = self.pitch_shift(wav, sr, n_steps=int(pitch_semitones))    # +7 semitones up
+            sf.write('temp.wav', out, sr)
+
+
+
+            if os.path.exists("temp_original.wav"):
+                os.remove("temp_original.wav")
+
+
+                
 
         if platform == "android":
             print("Before running convert_wav_to_aac() method")
@@ -196,188 +541,21 @@ class MainScreen(Screen):
             print("After calling: self.sound = SoundLoader.load(tmp2)")
             self.sound.play()
             self.sound.bind(on_stop=self.on_song_end)
+
+
         self.song_selected = True
         self.ids.playbtn.disabled = True
         self.ids.pausebtn.disabled = False
         self.ids.restartbtn.disabled = False
-    
+        self.ids.submitbtn.disabled = False
+
+
+
         os.chdir('..')
         os.chdir('..')
-        # # print(f".\\audio_files\\{output_path.split('\\')[-1][:-4]}_{tempo_factor}_{pitch_semitones}_{remove_pitch_count}.mp3")
-        # modified_audio = AudioSegment.from_wav(tmp2)
-        # backslash_char = "\\"
-        # audio_files_song = output_path.split(backslash_char)[-1][:-4]
-        # modified_audio.export(f".\\audio_files\\{audio_files_song}_{tempo_factor}_{pitch_semitones}_{remove_pitch_count}.mp3", format="mp3")
-
-
-
-    # def change_audio_properties(self, audio_path, output_path, tempo_factor, pitch_semitones, remove_pitch_count, use_shush=True):
-    #     """
-    #     Processes an audio file by:
-    #     1. Changing tempo and pitch,
-    #     2. For segments where a specified pitch (or pitch class) is detected, the corresponding segment is replaced
-    #         with a 'shush' noise.
-        
-    #     Parameters:
-    #     audio_path: str
-    #         Input audio file path.
-    #     output_path: str
-    #         Output audio file path.
-    #     tempo_factor: float
-    #         Factor for time stretching (e.g., 1.2 is 20% faster).
-    #     pitch_semitones: int
-    #         Semitones by which to shift the pitch.
-    #     remove_pitch_count: int
-    #         An integer 0–12 representing how many pitch classes (from a predetermined ordering) should be replaced.
-    #         (0 leaves the audio unchanged.)
-    #     use_shush: bool
-    #         Whether to replace target segments with shush noise (if False, the audio remains unchanged).
-        
-    #     The removal ordering is arbitrary—in this example, if remove_pitch_count is 2, the removal set is {8, 10},
-    #     which might correspond to, for example, Ab and Bb.
-    #     """
-    #     # Load the audio using librosa (gets a numpy array and sample rate)
-    #     y, sr = librosa.load(audio_path, sr=None)
-        
-    #     # Apply tempo change
-    #     y_stretched = librosa.effects.time_stretch(y, rate=tempo_factor)
-        
-    #     # Apply pitch shift
-    #     y_shifted = librosa.effects.pitch_shift(y_stretched, sr=sr, n_steps=pitch_semitones)
-        
-    #     if use_shush and remove_pitch_count > 0:
-    #         # Define removal ordering for pitch classes (0 = C, 1 = C#/Db, …, 11 = B)
-    #         # Here, the first `remove_pitch_count` pitch classes will be targeted
-    #         removal_order = [8, 10, 3, 6, 1, 4, 7, 9, 11, 0, 2, 5]
-    #         # Generate a list of numbers from 0 to 12
-    #         removal_order = list(range(12))
-    #         print(removal_order)
-    #         random.shuffle(removal_order)
-    #         print(removal_order)
-    #         removal_set = set(removal_order[:int(remove_pitch_count)])
-            
-    #         # Set the hop_length for frame analysis
-    #         hop_length = 512
-            
-    #         # Use pyin to estimate the pitch for each frame.
-    #         # Note: pyin works best on monophonic or dominant-pitch signals.
-    #         f0, voiced_flag, voiced_prob = librosa.pyin(
-    #             y_shifted, 
-    #             fmin=librosa.note_to_hz('C2'),
-    #             fmax=librosa.note_to_hz('C7'),
-    #             sr=sr,
-    #             hop_length=hop_length
-    #         )
-            
-    #         # Iterate over each frame. f0 is an array (one entry per hop)
-    #         for i, pitch in enumerate(f0):
-    #             # If no pitch was detected in this frame, skip it.
-    #             if np.isnan(pitch):
-    #                 continue
-                
-    #             # Convert the detected pitch to a MIDI note, then determine its pitch class.
-    #             midi = int(np.round(69 + 12 * np.log2(pitch / 440.0)))
-    #             pitch_class = midi % 12
-                
-    #             if pitch_class in removal_set:
-    #                 # Compute the start and end sample indices for this frame.
-    #                 start = i * hop_length
-    #                 end = min(len(y_shifted), start + hop_length)
-    #                 num_samples = end - start
-                    
-    #                 # Generate shush noise and replace this segment.
-    #                 y_shifted[start:end] = self.generate_shush(num_samples, amp=0.1)
-        
-    #     # Write the processed audio to a temporary WAV file.
-    #     temp_wav = "temp.wav"
-    #     sf.write(temp_wav, y_shifted, sr)
-
-        
-    #     # Convert the WAV to MP3 using pydub.
-    #     # print(f"{output_path.split('\\')[-1][:-4]}_{tempo_factor}_{pitch_semitones}_{remove_pitch_count}")
-    #     modified_audio = AudioSegment.from_wav(temp_wav)
-    #     modified_audio.export("temp.mp3", format="mp3")
-    #     # self.sound = SoundLoader.load(output_path)
-    #     self.sound = SoundLoader.load("temp.mp3")
-    #     self.sound.play()
-    #     self.sound.bind(on_stop=self.on_song_end)
-    #     self.song_selected = True
-    #     self.ids.playbtn.disabled = True
-    #     self.ids.pausebtn.disabled = False
-    #     self.ids.restartbtn.disabled = False
-
-    #     # # self.play_audio()
-    #     # print(os.listdir())
-    #     # audio.file_path = 'Hot_Cross_Buns.mp3'
-    #     # audio.play()
-
-    #     # player = MediaPlayer("temp.wav")
-    #     # player.set_volume(1.0)
-    #     # player.play()
-
-
-    #     # # Write the processed audio to a temporary WAV file.
-    #     # temp_wav = "temp.wav"
-    #     # sf.write(temp_wav, y_shifted, sr)
-
-    #     # # Open the WAV file
-    #     # file_path = 'temp.wav'
-    #     # wf = wave.open(file_path, 'rb')
-
-    #     # # Read audio parameters
-    #     # nchannels = wf.getnchannels()
-    #     # sampwidth = wf.getsampwidth()
-    #     # framerate = wf.getframerate()
-    #     # nframes = wf.getnframes()
-
-    #     # # Read audio data
-    #     # data = wf.readframes(nframes)
-        
-    #     # # Create and play the AudioSample
-    #     # sample = AudioSample(data, sample_rate=framerate, sample_size=sampwidth * 8, channels=nchannels)
-    #     # sample.play()
-
-    #     # # Initialize PyAudio
-    #     # p = pyaudio.PyAudio()
-
-    #     # # Open a stream
-    #     # stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-    #     #             channels=wf.getnchannels(),
-    #     #             rate=wf.getframerate(),
-    #     #             output=True)
-
-    #     # # Read and play the audio in chunks
-    #     # chunk = 1024
-    #     # data = wf.readframes(chunk)
-    #     # while data:
-    #     #     stream.write(data)
-    #     #     data = wf.readframes(chunk)
-
-    #     # # Close the stream and PyAudio
-    #     # stream.close()
-    #     # p.terminate()
-
-    #     # Convert the WAV to MP3 using pydub.
-    #     # modified_audio = AudioSegment.from_wav(temp_wav)
-    #     # modified_audio.export(output_path, format="mp3")
-  
-    #     os.chdir('..')
-    #     os.chdir('..')
-    #     # print(f".\\audio_files\\{output_path.split('\\')[-1][:-4]}_{tempo_factor}_{pitch_semitones}_{remove_pitch_count}.mp3")
-    #     modified_audio = AudioSegment.from_wav(temp_wav)
-    #     backslash_char = "\\"
-    #     audio_files_song = output_path.split(backslash_char)[-1][:-4]
-    #     modified_audio.export(f".\\audio_files\\{audio_files_song}_{tempo_factor}_{pitch_semitones}_{remove_pitch_count}.mp3", format="mp3")
-
-    # # def play_audio(self):
-    # #     audio.file_path = 'temp.wav'
-    # #     audio.play()
-    #     # self.ids.playbtn.disabled = False
-    #     # self.ids.pausebtn.disabled = True
-    #     # self.ids.restartbtn.disabled = True
 
     def play_aac_file(self, aac_path):
-        from jnius import autoclass
+        from jnius import autoclass, PythonJavaClass, java_method
 
         MediaPlayer = autoclass('android.media.MediaPlayer')
         File = autoclass('java.io.File')
@@ -392,13 +570,18 @@ class MainScreen(Screen):
         # media_player.setDataSource(fd)
         self.media_player.setDataSource(aac_path) 
         self.media_player.prepare()
+
+        # Set the completion listener
+        listener = OnCompletionListener()
+        self.media_player.setOnCompletionListener(listener)
+
         self.media_player.start()
 
         print("Playing AAC audio...")
 
 
     def convert_wav_to_aac(self, input_wav_path, output_aac_path):
-        from jnius import autoclass
+        from jnius import autoclass, PythonJavaClass, java_method
         import struct
 
 
@@ -475,7 +658,7 @@ class MainScreen(Screen):
 
 
     def add_adts_header(self, packet_length, sample_rate=44100, channels=1):
-        from jnius import autoclass
+        from jnius import autoclass, PythonJavaClass, java_method
         import struct
 
         freq_index_table = {
@@ -502,6 +685,13 @@ class MainScreen(Screen):
 
     def on_song_end(self, instance):
         self.ids.playbtn.disabled = False
+        self.ids.playbtn.text = "Play Again"
+        self.ids.pausebtn.disabled = True
+        self.ids.restartbtn.disabled = True
+
+    def on_song_end_android(self):
+        self.ids.playbtn.disabled = False
+        self.ids.playbtn.text = "Play Again"
         self.ids.pausebtn.disabled = True
         self.ids.restartbtn.disabled = True
         
@@ -509,7 +699,7 @@ class MainScreen(Screen):
     def pause_song(self):
         try:
             if platform == "android":
-                from jnius import autoclass
+                from jnius import autoclass, PythonJavaClass, java_method
                 self.media_player.pause()
             else:
                 self.sound.stop()
@@ -658,6 +848,12 @@ class ScoreScreen(Screen):
             json.dump(user_log, json_file, indent=4)  # 'indent' makes the JSON file 
 
         main_screen.ids.guess_input.text = ""
+        main_screen.ids.playbtn.text = "Play"
+        main_screen.ids.submitbtn.disabled = True
+        main_screen.ids.sliderA.disabled = False
+        main_screen.ids.slider1.disabled = False
+        main_screen.ids.slider2.disabled = False
+
 
 class MyScreenManager(ScreenManager):
     pass

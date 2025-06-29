@@ -30,7 +30,7 @@ include_patterns = _soundfile_data/*.so,assets/libsndfile_arm64.so
 #source.exclude_patterns = license,images/*/*.jpg
 
 # (str) Application versioning (method 1)
-version = 0.1.1
+version = 0.1.5
 
 # (str) Application versioning (method 2)
 # version.regex = __version__ = ['"](.*)['"]
@@ -38,7 +38,7 @@ version = 0.1.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,librosa,numpy,soundfile,wave,datetime,plyer,ffpyplayer,pydub,lazy_loader,cffi,ffmpeg,pyjnius,android,audioread
+requirements = python3,kivy,librosa,numpy,soundfile,wave,datetime,plyer,ffpyplayer,pydub,lazy_loader,cffi,ffmpeg,pyjnius,android,audioread,audiotsm,ffmpeg-python,future
 
 
 # (str) Custom source folders for requirements
@@ -188,6 +188,8 @@ android.add_classes = net/sourceforge/lame/lowlevel/*.class
 
 # (list) Android AAR archives to add
 #android.add_aars =
+# android.add_aars = aars/ffmpeg-kit-min-6.0.1.aar
+
 
 # (list) Put these files or directories in the apk assets directory.
 # Either form may be used, and assets need not be in 'source.include_exts'.
@@ -209,6 +211,7 @@ android.add_classes = net/sourceforge/lame/lowlevel/*.class
 
 # (list) Gradle dependencies to add
 #android.gradle_dependencies =
+
 
 # (bool) Enable AndroidX support. Enable when 'android.gradle_dependencies'
 # contains an 'androidx' package, or any package from Kotlin source.

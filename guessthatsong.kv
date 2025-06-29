@@ -137,7 +137,9 @@
 
         # Submit button to switch to the playlist screen.
         Button:
+            id: submitbtn
             text: "Submit"
+            disabled: True
             size_hint_y: None
             height: dp(50)
             on_press: root.manager.current = "score"; app.root.get_screen("score").getscore()
