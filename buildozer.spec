@@ -30,7 +30,7 @@ include_patterns = _soundfile_data/*.so,assets/libsndfile_arm64.so
 #source.exclude_patterns = license,images/*/*.jpg
 
 # (str) Application versioning (method 1)
-version = 0.1.5
+version = 0.1.7
 
 # (str) Application versioning (method 2)
 # version.regex = __version__ = ['"](.*)['"]

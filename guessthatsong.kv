@@ -8,141 +8,184 @@
 
 <MainScreen>:
     name: "main"
+    FloatLayout:
+        id: root_layout
+        
 
-    BoxLayout:
-        orientation: "vertical"
-        padding: dp(10)
-        spacing: dp(10)
-        canvas.before:
-            Color:
-                rgba: app.background_color
-            Rectangle:
-                pos: self.pos
-                size: self.size
 
-        # Header with app title and toggle theme button.
-        BoxLayout:
-            size_hint_y: None
-            height: dp(50)
-            spacing: dp(10)
-            Label:
-                text: "Guess That Song"
-                font_size: dp(24)
-                halign: "left"
-            Button:
-                text: "Toggle Theme"
-                size_hint_x: None
-                width: dp(120)
-                on_press: app.toggle_theme()
 
-        # Row for Pitch Slider
         BoxLayout:
             orientation: "vertical"
-            spacing: dp(5)
-            size_hint_y: None
-            height: dp(100)
-            Label:
-                text: "Pitch (Semitone) " + str(sliderA.value)
-                size_hint_y: None
-                height: dp(30)
-            Slider:
-                id: sliderA
-                min: -12
-                max: 12
-                value: 0
-                step: 1
-
-        # Tempo slider section
-        BoxLayout:
-            orientation: "vertical"
-            spacing: dp(5)
-            size_hint_y: None
-            height: dp(100)
-            Label:
-                text: "Tempo: " + str(slider1.value)
-                size_hint_y: None
-                height: dp(30)
-            Slider:
-                id: slider1
-                min: 0.75
-                max: 1.5
-                value: 1
-                step: 0.05
-
-        # Difficulty slider section
-        BoxLayout:
-            orientation: "vertical"
-            spacing: dp(5)
-            size_hint_y: None
-            height: dp(100)
-            Label:
-                text: "Difficulty: " + str(slider2.value)
-                size_hint_y: None
-                height: dp(30)
-            Slider:
-                id: slider2
-                min: 0
-                max: 12
-                value: 0
-                step: 1
-
-        # Dropdown and View Playlist button row
-        BoxLayout:
-            size_hint_y: None
-            height: dp(50)
+            padding: dp(10)
             spacing: dp(10)
-            orientation: "horizontal"
-            Spinner:
-                id: dropdown
-                text: "Select Playlist"
-                values: ["Hymns", "Nursery Rhymes", "Custom"]
-                size_hint_y: None
-                height: dp(44)
-                on_text: if dropdown.text != "Select Playlist": root.toggle_view_playlist()
-            Button:
-                id: view_playlist
-                text: "View Playlist"
-                on_press: root.manager.current = "playlist"
-                disabled: root.view_playlist_condition
+            canvas.before:
+                Color:
+                    rgba: app.background_color
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
 
-        # Row of media control buttons.
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint_y: None
-            height: dp(50)
-            spacing: dp(10)
+            # Header with app title and toggle theme button.
+            BoxLayout:
+                size_hint_y: None
+                height: dp(50)
+                spacing: dp(10)
+                Button:
+                    text: "Account Info"
+                    size_hint_x: None
+                    width: dp(120)
+                    # on_press: app.toggle_theme()
+                Label:
+                    text: "Guess That Song"
+                    font_size: dp(24)
+                    halign: "left"
+                Button:
+                    text: "Toggle Theme"
+                    size_hint_x: None
+                    width: dp(120)
+                    on_press: app.toggle_theme()
+
+            # Row for Pitch Slider
+            BoxLayout:
+                orientation: "vertical"
+                spacing: dp(5)
+                size_hint_y: None
+                height: dp(100)
+                Label:
+                    text: "Pitch (Semitone) " + str(sliderA.value)
+                    size_hint_y: None
+                    height: dp(30)
+                Slider:
+                    id: sliderA
+                    min: -12
+                    max: 12
+                    value: 0
+                    step: 1
+                    value_track: True
+                    value_track_color: 0.086, 0.094, 0.090, 1 
+
+            # Tempo slider section
+            BoxLayout:
+                orientation: "vertical"
+                spacing: dp(5)
+                size_hint_y: None
+                height: dp(100)
+                Label:
+                    text: "Tempo: " + str(slider1.value)
+                    size_hint_y: None
+                    height: dp(30)
+                Slider:
+                    id: slider1
+                    min: 0.75
+                    max: 1.5
+                    value: 1
+                    step: 0.05
+                    value_track: True
+                    value_track_color: 0.086, 0.094, 0.090, 1 
+
+            # Difficulty slider section
+            BoxLayout:
+                orientation: "vertical"
+                spacing: dp(5)
+                size_hint_y: None
+                height: dp(100)
+                Label:
+                    text: "Difficulty: " + str(slider2.value)
+                    size_hint_y: None
+                    height: dp(30)
+                Slider:
+                    id: slider2
+                    min: 0
+                    max: 12
+                    value: 0
+                    step: 1
+                    value_track: True
+                    value_track_color: 0.086, 0.094, 0.090, 1 
+                ProgressBar:
+                    id: progress
+                    max: 6  # Number of steps
+                    value: 0
+                    opacity: 0.0
+                Label:
+                    id: status_label
+                    text: '0'
+                    opacity: 0.0
+
+            # Dropdown and View Playlist button row
+            BoxLayout:
+                size_hint_y: None
+                height: dp(50)
+                spacing: dp(10)
+                orientation: "horizontal"
+                Spinner:
+                    id: dropdown
+                    text: "Select Playlist"
+                    values: ["Hymns", "Nursery Rhymes", "Custom"]
+                    size_hint_y: None
+                    height: dp(44)
+                    on_text: if dropdown.text != "Select Playlist": root.toggle_view_playlist()
+                Button:
+                    id: view_playlist
+                    text: "View Playlist"
+                    on_press: root.manager.current = "playlist"
+                    disabled: root.view_playlist_condition
+
+            # Row of media control buttons.
+            BoxLayout:
+                orientation: "horizontal"
+                size_hint_y: None
+                height: dp(50)
+                spacing: dp(10)
+                Button:
+                    id: playbtn
+                    text: "Play"
+                    on_press: root.play_random_song()
+                    disabled: root.view_playlist_condition
+                Button:
+                    id: pausebtn
+                    text: "Pause"
+                    disabled: True
+                    on_press: root.pause_song()
+                Button:
+                    id: restartbtn
+                    text: "Restart"
+                    disabled: True
+                    on_press: root.restart_song()
+
+            # TextInput for the guess.
+            TextInput:
+                id: guess_input
+                hint_text: "Place your guess here"
+                multiline: False
+                size_hint_y: None
+                height: dp(40)
+
+            # Submit button to switch to the playlist screen.
             Button:
-                id: playbtn
-                text: "Play"
-                on_press: root.play_random_song()
-                disabled: root.view_playlist_condition
-            Button:
-                id: pausebtn
-                text: "Pause"
+                id: submitbtn
+                text: "Submit"
                 disabled: True
-                on_press: root.pause_song()
-            Button:
-                id: restartbtn
-                text: "Restart"
-                disabled: True
-                on_press: root.restart_song()
+                size_hint_y: None
+                height: dp(50)
+                on_press: root.manager.current = "score"; app.root.get_screen("score").getscore()
+        
+        # Video widget as the background
+        Video:
+            id: bg_video
+            source: "background_video.mp4"
+            options: {"eos": "loop"}
+            state: "play"
+            volume: 0
+            allow_stretch: True
+            keep_ratio: False
+            size: self.parent.size
+            pos: self.parent.pos
+            size_hint: 1, 1
+            pos_hint: {"x": 0, "y": 0}
+            state: "play"
+            opacity: 0.1
 
-        # TextInput for the guess.
-        TextInput:
-            id: guess_input
-            hint_text: "Place your guess here"
-            multiline: False
-            size_hint_y: None
-            height: dp(40)
-
-        # Submit button to switch to the playlist screen.
-        Button:
-            id: submitbtn
-            text: "Submit"
-            disabled: True
-            size_hint_y: None
-            height: dp(50)
-            on_press: root.manager.current = "score"; app.root.get_screen("score").getscore()
+            
 
 
 <PlaylistScreen>:
@@ -182,7 +225,6 @@
                 size_hint_y: None
                 height: dp(50)
                 on_press: root.add_song()
-                # on_press: root.manager.current = "upload"
 
             Button:
                 text: "Back"
@@ -247,12 +289,18 @@
             font_size: dp(24)
             size_hint_y: None
             height: dp(50)
-        Label:
-            id: scorelabel
-            text: "No score available"
-            font_size: dp(24)
-            size_hint_y: None
-            height: dp(50)
+        ScrollView:
+            do_scroll_x: True
+            do_scroll_y: False
+            Label:
+                id: scorelabel
+                text_size: None, None
+                size_hint: None, None
+                size: self.texture_size
+                text: "No score available"
+                font_size: dp(24)
+                size_hint_y: None
+                height: dp(50)
         BoxLayout:
             orientation: "horizontal"
             Button:
@@ -275,3 +323,6 @@
         size_hint_x: None
         width: dp(80)
         on_press: app.root.get_screen('playlist').remove_song(root.song_name)
+        
+
+

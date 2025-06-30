@@ -1,3 +1,6 @@
+import os
+os.environ["KIVY_VIDEO"] = "ffpyplayer"
+
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.boxlayout import BoxLayout
@@ -7,7 +10,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
-import os
+
 import shutil
 from random import randint
 import librosa
@@ -29,6 +32,7 @@ from plyer import filechooser, audio
 # from audiostream.core import AudioSample
 # from ffpyplayer.player import MediaPlayer
 from kivy.core.audio import SoundLoader
+from kivy.uix.progressbar import ProgressBar
 import time
 # import psutil
 
@@ -84,6 +88,8 @@ if platform == "android":
 
 import soundfile as sf
 
+
+
 class WrappedLabel(Label):
     # Based on Tshirtman's answer
     def __init__(self, **kwargs):
@@ -104,6 +110,24 @@ class MainScreen(Screen):
     song_selected = False
     view_playlist_condition = True
     media_player = None
+    cap_counter = 0
+    cap_percentage = 0.0
+
+    def next_progress_step(self):
+        if self.ids.status_label.opacity == 0.0:
+            self.ids.status_label.opacity = 1.0
+
+        if self.ids.progress.opacity == 0.0:
+            self.ids.progress.opacity = 1.0
+
+        # self.ids.status_label.text = str(round((float(self.ids.status_label.text) + 1 / self.ids.progress.max), 2))
+        self.cap_percentage = (self.cap_counter + 1 / self.ids.progress.max) * 100
+        self.cap_counter += 1
+        self.ids.status_label.text = f"Loading Song: {round(self.cap_percentage, 2)}%"
+        if float(self.cap_percentage) >= 100:
+            self.ids.status_label.text = "Done Loading Song"
+        self.ids.progress.value += 1
+
 
     def toggle_view_playlist(self):
         self.ids.view_playlist.disabled = False
@@ -113,6 +137,10 @@ class MainScreen(Screen):
         self.song_selected = False
 
     def play_random_song(self):
+
+        # Part 1
+        self.next_progress_step()
+
         print(f'Song selected: {self.song_selected}')
 
         # Disable sliders and dropdown
@@ -411,6 +439,9 @@ class MainScreen(Screen):
             if pc is not None and pc in removal:
                 out[i:i+hop] = self.generate_shush(hop)
 
+        # Part 2
+        self.next_progress_step()
+
         # temp_wav = "temp.wav"
         # sf.write(temp_wav, out, sr)
         # AudioSegment.from_wav(temp_wav).export(output_path, format="mp3")
@@ -419,6 +450,9 @@ class MainScreen(Screen):
         tmp2 = "temp.wav"
         sf.write(tmp2, out, sr)
         chosen_uuid = uuid.uuid4()
+
+        # Part 3
+        self.next_progress_step()
 
         # Change tempo of song if necessary
         if tempo_factor != 1.0:
@@ -438,6 +472,9 @@ class MainScreen(Screen):
             # Check if the file exists before attempting to remove it
             if os.path.exists(input_path):
                 os.remove(input_path)
+
+        # Part 4
+        self.next_progress_step()
 
         # # Change pitch of song if necessary
         # if pitch_semitones != 0.0:
@@ -514,6 +551,9 @@ class MainScreen(Screen):
             if os.path.exists("temp_original.wav"):
                 os.remove("temp_original.wav")
 
+        # Part 5
+        self.next_progress_step()
+
 
                 
 
@@ -527,6 +567,9 @@ class MainScreen(Screen):
         else:
             AudioSegment.from_wav(tmp2).export(tmp2, format="mp3")
             print(output_path)
+
+        # Part 6
+        self.next_progress_step()
 
         # self.sound = SoundLoader.load(output_path)
         print(f"tmp2: {tmp2}")
@@ -820,6 +863,11 @@ class ScoreScreen(Screen):
         title_text = main_screen.random_song
         main_screen.song_selected = False
 
+        try:
+            main_screen.pause_song()
+        except Exception as e:
+            print("There was an error when attempting to stop the song\n{e}")
+
         title_text = title_text.replace('_', ' ')
 
         # Remove empty spaces at beginning or end of the strings
@@ -853,6 +901,10 @@ class ScoreScreen(Screen):
         main_screen.ids.sliderA.disabled = False
         main_screen.ids.slider1.disabled = False
         main_screen.ids.slider2.disabled = False
+        main_screen.ids.status_label.text = "0"
+        main_screen.ids.progress.value = 0
+        main_screen.ids.status_label.opacity = 0.0
+        main_screen.ids.progress.opacity = 0.0
 
 
 class MyScreenManager(ScreenManager):
@@ -861,20 +913,30 @@ class MyScreenManager(ScreenManager):
 class GuessThatSongApp(App):
     # Properties to hold the current theme and background color.
     theme = StringProperty('light')  # 'light' or 'dark'
-    background_color = ListProperty([0.678, 0.847, 0.902, 1])  # light blue RGBA
+    # background_color = ListProperty([0.678, 0.847, 0.902, 1])  # light blue RGBA
+    background_color = ListProperty([1, 0.83, 0, 1])  # magenta RGBA
 
     def toggle_theme(self):
         # Toggle between light mode (light blue) and dark mode (dark blue)
         if self.theme == 'light':
             self.theme = 'dark'
-            self.background_color = [0, 0, 0.5, 1]  # dark blue RGBA
+            # self.background_color = [0, 0, 0.5, 1]  # dark blue RGBA
+            self.background_color = [0.74, 0.09, 0.25, 1] # magenta RGBA
         else:
             self.theme = 'light'
-            self.background_color = [0.678, 0.847, 0.902, 1]
+            # self.background_color = [0.678, 0.847, 0.902, 1]
+            self.background_color = [1, 0.83, 0, 1] # yellow RGBA
             
     def build(self):
         print(platform)
         return MyScreenManager()
+    
+    def on_start(self):
+        # video = self.root.ids.bg_video
+        # print("Video source loaded:", video.source)
+        # print("Video state:", video.state)
+        pass
+
 
 
 
