@@ -4,16 +4,14 @@
     MainScreen:
     PlaylistScreen:
     UploadScreen:
+    AccountScreen:
     ScoreScreen:
-
+    ColorScreen:
+    
 <MainScreen>:
     name: "main"
     FloatLayout:
         id: root_layout
-        
-
-
-
         BoxLayout:
             orientation: "vertical"
             padding: dp(10)
@@ -34,16 +32,21 @@
                     text: "Account Info"
                     size_hint_x: None
                     width: dp(120)
-                    # on_press: app.toggle_theme()
-                Label:
-                    text: "Guess That Song"
-                    font_size: dp(24)
-                    halign: "left"
+                    on_press: root.manager.current = "account"; root.set_username()
+                
                 Button:
-                    text: "Toggle Theme"
+                    text: "Choose Theme"
                     size_hint_x: None
                     width: dp(120)
-                    on_press: app.toggle_theme()
+                    # on_press: app.toggle_theme()
+                    on_press: root.manager.current = "color"; root.set_background_rbg()
+
+                Button:
+                    text: "Toggle Video"
+                    size_hint_x: None
+                    width: dp(120)
+                    on_press: root.toggle_video()
+
 
             # Row for Pitch Slider
             BoxLayout:
@@ -51,6 +54,11 @@
                 spacing: dp(5)
                 size_hint_y: None
                 height: dp(100)
+                Label:
+                    text: "Guess That Song"
+                    font_size: dp(24)
+                    halign: "left"
+            
                 Label:
                     text: "Pitch (Semitone) " + str(sliderA.value)
                     size_hint_y: None
@@ -103,7 +111,7 @@
                     value_track_color: 0.086, 0.094, 0.090, 1 
                 ProgressBar:
                     id: progress
-                    max: 6  # Number of steps
+                    max: 10  # Number of steps
                     value: 0
                     opacity: 0.0
                 Label:
@@ -120,7 +128,7 @@
                 Spinner:
                     id: dropdown
                     text: "Select Playlist"
-                    values: ["Hymns", "Nursery Rhymes", "Custom"]
+                    values: ["Hymns", "Nursery Rhymes", "Custom", "Special"]
                     size_hint_y: None
                     height: dp(44)
                     on_text: if dropdown.text != "Select Playlist": root.toggle_view_playlist()
@@ -185,9 +193,6 @@
             state: "play"
             opacity: 0.1
 
-            
-
-
 <PlaylistScreen>:
     name: "playlist"
     BoxLayout:
@@ -231,6 +236,21 @@
                 size_hint_y: None
                 height: dp(50)
                 on_press: root.manager.current = "main"
+    # # Video widget as the background
+    # Video:
+    #     id: bg_video
+    #     source: "background_video.mp4"
+    #     options: {"eos": "loop"}
+    #     state: "play"
+    #     volume: 0
+    #     allow_stretch: True
+    #     keep_ratio: False
+    #     size: self.parent.size
+    #     pos: self.parent.pos
+    #     size_hint: 1, 1
+    #     pos_hint: {"x": 0, "y": 0}
+    #     state: "play"
+    #     opacity: 0.1
         
 <UploadScreen>:
     name: "upload"
@@ -272,6 +292,203 @@
                 height: dp(50)
                 on_press: root.manager.current = "playlist"
 
+<ColorScreen>:
+    name: "color"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(10)
+        padding: dp(10)
+        canvas.before:
+            Color:
+                rgba: app.background_color
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+            text: "R: " + str(sliderR.value)
+            size_hint_y: None
+            height: dp(30)
+        Slider:
+            id: sliderR
+            min: 0
+            max: 255
+            value: 0
+            step: 1
+            value_track: True
+            value_track_color: 0.086, 0.094, 0.090, 1 
+
+        Label:
+            text: "G: " + str(sliderG.value)
+            size_hint_y: None
+            height: dp(30)
+        Slider:
+            id: sliderG
+            min: 0
+            max: 255
+            value: 0
+            step: 1
+            value_track: True
+            value_track_color: 0.086, 0.094, 0.090, 1 
+
+        Label:
+            text: "B: " + str(sliderB.value)
+            size_hint_y: None
+            height: dp(30)
+        Slider:
+            id: sliderB
+            min: 0
+            max: 255
+            value: 0
+            step: 1
+            value_track: True
+            value_track_color: 0.086, 0.094, 0.090, 1 
+
+        Label:
+            text: "Opacity: " + str(sliderOpacity.value)
+            size_hint_y: None
+            height: dp(30)
+        Slider:
+            id: sliderOpacity
+            min: 0
+            max: 1
+            value: 0
+            step: 0.01
+            value_track: True
+            value_track_color: 0.086, 0.094, 0.090, 1 
+        
+        BoxLayout:
+            orientation: "horizontal"
+            Button:
+                text: "Apply"
+                size_hint_y: None
+                height: dp(50)
+                # on_press: root.add_song()
+                on_press: app.change_theme(sliderR.value, sliderG.value, sliderB.value, sliderOpacity.value)
+
+            Button:
+                text: "Back"
+                size_hint_y: None
+                height: dp(50)
+                on_press: root.manager.current = "main"
+
+
+<AccountScreen>:
+    name: "account"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(10)
+        padding: dp(10)
+        canvas.before:
+            Color:
+                rgba: app.background_color
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+            text: "Account Info"
+            font_size: dp(24)
+            size_hint_y: None
+            height: dp(50)
+        ScrollView:
+            do_scroll_x: True
+            do_scroll_y: False
+            BoxLayout:
+                orientation: "vertical"
+                spacing: dp(10)
+                padding: dp(10)
+                BoxLayout:
+                    orientation: "horizontal"
+                    spacing: dp(10)
+
+                    Label:
+                        id: usernamelabel
+                        text_size: None, None
+                        size_hint: None, None
+                        text: "Username: "
+                        font_size: dp(24)
+                        size_hint_y: None
+                        height: dp(50)
+                    TextInput:
+                        id: usernametext
+                        hint_text: "Put your username here"
+                        multiline: False
+                        size_hint_y: None
+                        height: dp(40)
+
+                Label:
+                    id: topcorrectsongs
+                    text_size: None, None
+                    size_hint: None, None
+                    size: self.texture_size
+                    text: "Top Songs Guessed Correctly: "
+                    font_size: dp(24)
+                    size_hint_y: None
+                    height: dp(50)
+                Label:
+                    id: topincorrectsongs
+                    text_size: None, None
+                    size_hint: None, None
+                    size: self.texture_size
+                    text: "Top Songs Guessed Incorrectly: "
+                    font_size: dp(24)
+                    size_hint_y: None
+                    height: dp(50)
+                Label:
+                    id: mostcommonkey
+                    text_size: None, None
+                    size_hint: None, None
+                    size: self.texture_size
+                    text: "Most Commonly Used Key Signature: "
+                    font_size: dp(24)
+                    size_hint_y: None
+                    height: dp(50)
+                Label:
+                    id: mostcommontempo
+                    text_size: None, None
+                    size_hint: None, None
+                    size: self.texture_size
+                    text: "Most Commonly Used Tempo: "
+                    font_size: dp(24)
+                    size_hint_y: None
+                    height: dp(50)
+                Label:
+                    id: mostcommonlod
+                    text_size: None, None
+                    size_hint: None, None
+                    size: self.texture_size
+                    text: "Most Commonly Used Level Of Difficulty: "
+                    font_size: dp(24)
+                    size_hint_y: None
+                    height: dp(50)
+        BoxLayout:
+            orientation: "horizontal"
+            Button:
+                text: "Apply"
+                size_hint_y: None
+                height: dp(50)
+                # on_press: root.add_song()
+                on_press: app.change_username(usernametext.text)
+            Button:
+                text: "Back"
+                size_hint_y: None
+                height: dp(50)
+                on_press: root.manager.current = "main"
+    # # Video widget as the background
+    # Video:
+    #     id: bg_video
+    #     source: "background_video.mp4"
+    #     options: {"eos": "loop"}
+    #     state: "play"
+    #     volume: 0
+    #     allow_stretch: True
+    #     keep_ratio: False
+    #     size: self.parent.size
+    #     pos: self.parent.pos
+    #     size_hint: 1, 1
+    #     pos_hint: {"x": 0, "y": 0}
+    #     state: "play"
+    #     opacity: 0.1
+
 <ScoreScreen>:
     name: "score"
     BoxLayout:
@@ -308,6 +525,24 @@
                 size_hint_y: None
                 height: dp(50)
                 on_press: root.manager.current = "main"
+
+    # # Video widget as the background
+    # Video:
+    #     id: bg_video
+    #     source: "background_video.mp4"
+    #     options: {"eos": "loop"}
+    #     state: "play"
+    #     volume: 0
+    #     allow_stretch: True
+    #     keep_ratio: False
+    #     size: self.parent.size
+    #     pos: self.parent.pos
+    #     size_hint: 1, 1
+    #     pos_hint: {"x": 0, "y": 0}
+    #     state: "play"
+    #     opacity: 0.1
+
+
 
 <SongItem>:
     orientation: "horizontal"

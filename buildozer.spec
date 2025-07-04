@@ -13,7 +13,7 @@ package.domain = org.test
 source.dir = .
 
 # (list) Source files to include (let empty to include all the files)
-source.include_exts = py,png,jpg,kv,atlas,wav,csv,json,so,mp3
+source.include_exts = py,png,jpg,kv,atlas,wav,csv,json,so,mp3,mp4
 
 # (list) List of inclusions using pattern matching
 #source.include_patterns = assets/*,images/*.png
@@ -30,7 +30,7 @@ include_patterns = _soundfile_data/*.so,assets/libsndfile_arm64.so
 #source.exclude_patterns = license,images/*/*.jpg
 
 # (str) Application versioning (method 1)
-version = 0.1.7
+version = 0.1.9
 
 # (str) Application versioning (method 2)
 # version.regex = __version__ = ['"](.*)['"]

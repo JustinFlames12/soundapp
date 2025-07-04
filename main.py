@@ -28,14 +28,12 @@ import json
 import uuid
 from kivy.utils import platform
 from plyer import filechooser, audio
-# import wave
 # from audiostream.core import AudioSample
 # from ffpyplayer.player import MediaPlayer
 from kivy.core.audio import SoundLoader
 from kivy.uix.progressbar import ProgressBar
 import time
 # import psutil
-
 
 if platform == "android":
     from android.storage import app_storage_path
@@ -50,7 +48,6 @@ if platform == "android":
     ffmpeg_path = "./soundapp/Lib/site-packages/ffmpeg"  # update with your actual path
     os.chmod(ffmpeg_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # equivalent to 0o755
     print("Done with: ffmpeg")
-
 
     # Define a Python class that implements the Java OnCompletionListener interface
     class OnCompletionListener(PythonJavaClass):
@@ -88,8 +85,6 @@ if platform == "android":
 
 import soundfile as sf
 
-
-
 class WrappedLabel(Label):
     # Based on Tshirtman's answer
     def __init__(self, **kwargs):
@@ -105,13 +100,20 @@ class SongItem(BoxLayout):
 class RootWidget(BoxLayout):
     pass
 
-
 class MainScreen(Screen):
     song_selected = False
     view_playlist_condition = True
     media_player = None
     cap_counter = 0
     cap_percentage = 0.0
+
+    def toggle_video(self):
+        if self.ids.bg_video.state == "play":
+           self.ids.bg_video.state = "pause"
+           self.ids.bg_video.opacity = 0.0
+        else:
+           self.ids.bg_video.state = "play"
+           self.ids.bg_video.opacity = 0.1
 
     def next_progress_step(self):
         if self.ids.status_label.opacity == 0.0:
@@ -128,6 +130,40 @@ class MainScreen(Screen):
             self.ids.status_label.text = "Done Loading Song"
         self.ids.progress.value += 1
 
+    def set_background_rbg(self):
+        color_screen = self.manager.get_screen("color")
+        try:
+            with open('user_account.json', 'r') as f:
+                # Loading the json data into a python object
+                json_data = json.load(f)
+            color_screen.ids.sliderR.value = json_data["background_color"][0] * 255
+            color_screen.ids.sliderG.value = json_data["background_color"][1] * 255
+            color_screen.ids.sliderB.value = json_data["background_color"][2] * 255
+            color_screen.ids.sliderOpacity.value = json_data["background_color"][3]
+        except Exception as e:
+            print(f"Unable to pull up saved background color. Error: {e}")
+            color_screen.ids.sliderR.value = 1 * 255
+            color_screen.ids.sliderG.value = 0.83 * 255
+            color_screen.ids.sliderB.value = 0 * 255
+            color_screen.ids.sliderOpacity.value = 0.5
+
+    def set_username(self):
+        account_screen = self.manager.get_screen("account")
+        try:
+            with open('user_account.json', 'r') as f:
+                # Loading the json data into a python object
+                json_data = json.load(f)
+            account_screen.ids.usernametext.text = json_data["username"]
+            tmp_dir = os.getcwd()
+            try:
+                os.chdir("data")
+                print(os.listdir())
+                os.chdir("..")
+            except Exception as e:
+                print("Error: {e}")
+                os.chdir(tmp_dir)
+        except Exception as e:
+            print(f"Unable to pull up saved username. Error: {e}")
 
     def toggle_view_playlist(self):
         self.ids.view_playlist.disabled = False
@@ -136,8 +172,19 @@ class MainScreen(Screen):
         # self.ids.restartbtn.disabled = False
         self.song_selected = False
 
+        if self.ids.dropdown.text == "Special":
+            self.ids.sliderA.value = 0
+            self.ids.sliderA.disabled = True
+            self.ids.slider1.value = 1
+            self.ids.slider1.disabled = True
+            self.ids.slider2.value = 0
+            self.ids.slider2.disabled = True
+        else:
+            self.ids.sliderA.disabled = False
+            self.ids.slider1.disabled = False
+            self.ids.slider2.disabled = False
+        
     def play_random_song(self):
-
         # Part 1
         self.next_progress_step()
 
@@ -150,31 +197,56 @@ class MainScreen(Screen):
 
         if self.song_selected == False:
             # Reset sound variable
+            try:
+                self.sound.unload()
+            except Exception as e:
+                print(f"Could not unload self.sound. Error: {e}")
             self.sound = None
 
             self.ids.playbtn.disabled = True
             self.ids.submitbtn.disabled = False
+            self.ids.dropdown.disabled = True
+            self.ids.view_playlist.disabled = True
             # self.ids.pausebtn.disabled = False
             # self.ids.restartbtn.disabled = False
             dropdown_text = self.ids.dropdown.text
             dropdown_text = dropdown_text.replace(' ', '')
+            print(f'Before chdir into songs')
+            print(os.listdir())
             os.chdir('songs')
-            os.chdir(dropdown_text)
+            tmp_directory = os.getcwd()
+            print(f'After chdir into songs')
+            print(os.listdir())
+            # os.chdir(dropdown_text)
+            print(dropdown_text)
             # if 'temp.wav' in os.listdir():
             #     os.remove('temp.wav')
             for _ in range(5):
                 try:
-                    if 'temp.mp3' in os.listdir():
-                        os.remove('temp.mp3')
-                    elif 'temp.m4a' in os.listdir():
-                        os.remove('temp.m4a')
-                    # elif 'temp.wav' in os.listdir():
-                    #     os.remove('temp.wav')
+                    print("*****************FOR LOOP************")
+                    print(os.listdir())
+                    music_dirs = ["Hymns", "NurseryRhymes", "Custom", "Special"]
+                    for directory in music_dirs:
+                        try:
+                            os.chdir(directory)
+                        except Exception as e:
+                            print(f"Directory does not exist. Creating it now: {e}")
+                            os.mkdir(directory) # Make directory if it does not exist
+                        if 'temp.mp3' in os.listdir():
+                            os.remove('temp.mp3')
+                        elif 'temp.m4a' in os.listdir():
+                            os.remove('temp.m4a')
+                        elif 'temp.wav' in os.listdir():
+                            os.remove('temp.wav')
+                        os.chdir("..")
                     break
                 except PermissionError as e:
                     print(f"Permission Error (will try again): {e}")
+                    os.chdir(tmp_directory)
                     time.sleep(0.5)
             
+            self.next_progress_step()
+            os.chdir(dropdown_text)
             list_songs = [song for song in os.listdir() if song != 'temp.wav' or song != 'temp_original.wav']
             random_song = randint(0, len(list_songs) - 1)
             print(f'Song: {list_songs[random_song]}')
@@ -202,6 +274,9 @@ class MainScreen(Screen):
                 self.ids.sliderA.disabled = False
                 self.ids.slider1.disabled = False
                 self.ids.slider2.disabled = False
+                self.ids.sliderA.disabled = False
+                self.ids.dropdown.disabled = False
+                self.ids.view_playlist.disabled = False
 
                 os.chdir('..')
                 os.chdir('..')
@@ -282,7 +357,6 @@ class MainScreen(Screen):
             wf_out.setsampwidth(sample_width)
             wf_out.setframerate(sample_rate)
             wf_out.writeframes(processed_audio.tobytes())
-
 
     def time_stretch(self, y: np.ndarray, factor: float) -> np.ndarray:
         return self.resample_audio(y, factor)
@@ -418,6 +492,8 @@ class MainScreen(Screen):
         tempo_factor=1.0, pitch_semitones=0, remove_pitch_count=0
     ):
         y, sr = sf.read(audio_path)
+        self.next_progress_step()
+
         if y.ndim > 1:
             y = y.mean(axis=1)
 
@@ -430,10 +506,12 @@ class MainScreen(Screen):
         removal_order = [8, 10, 3, 6, 1, 4, 7, 9, 11, 0, 2, 5]
         print(remove_pitch_count)
         removal = set(removal_order[:int(remove_pitch_count)])
+        self.next_progress_step()
 
         # Frame-by-frame pitch detect & shush
         win, hop = 2048, 512
         out = y.copy()
+        self.next_progress_step()
         for i in range(0, len(y) - win, hop):
             pc = self.estimate_pitch_class(y[i:i+win], sr)
             if pc is not None and pc in removal:
@@ -546,16 +624,11 @@ class MainScreen(Screen):
             out = self.pitch_shift(wav, sr, n_steps=int(pitch_semitones))    # +7 semitones up
             sf.write('temp.wav', out, sr)
 
-
-
             if os.path.exists("temp_original.wav"):
                 os.remove("temp_original.wav")
 
         # Part 5
         self.next_progress_step()
-
-
-                
 
         if platform == "android":
             print("Before running convert_wav_to_aac() method")
@@ -573,26 +646,24 @@ class MainScreen(Screen):
 
         # self.sound = SoundLoader.load(output_path)
         print(f"tmp2: {tmp2}")
+        print(f"os.getcwd() -> {os.getcwd()}")
 
         if platform == "android":
             print("Before calling: play_aac_file")
-            self.play_aac_file(tmp2)
+            self.play_aac_file(f"{os.getcwd()}/{tmp2}")
             print("After calling: play_aac_file")
         else:      
             print("Before calling: self.sound = SoundLoader.load(tmp2)")
-            self.sound = SoundLoader.load(tmp2)
+            self.sound = SoundLoader.load(f"{os.getcwd()}\\{tmp2}")
             print("After calling: self.sound = SoundLoader.load(tmp2)")
             self.sound.play()
             self.sound.bind(on_stop=self.on_song_end)
-
 
         self.song_selected = True
         self.ids.playbtn.disabled = True
         self.ids.pausebtn.disabled = False
         self.ids.restartbtn.disabled = False
         self.ids.submitbtn.disabled = False
-
-
 
         os.chdir('..')
         os.chdir('..')
@@ -621,7 +692,6 @@ class MainScreen(Screen):
         self.media_player.start()
 
         print("Playing AAC audio...")
-
 
     def convert_wav_to_aac(self, input_wav_path, output_aac_path):
         from jnius import autoclass, PythonJavaClass, java_method
@@ -698,8 +768,6 @@ class MainScreen(Screen):
         fos.close()
         print(f"AAC file with ADTS headers created: {output_aac_path}")
 
-
-
     def add_adts_header(self, packet_length, sample_rate=44100, channels=1):
         from jnius import autoclass, PythonJavaClass, java_method
         import struct
@@ -725,7 +793,6 @@ class MainScreen(Screen):
         adts[6] = 0xFC
         return adts
 
-
     def on_song_end(self, instance):
         self.ids.playbtn.disabled = False
         self.ids.playbtn.text = "Play Again"
@@ -737,7 +804,6 @@ class MainScreen(Screen):
         self.ids.playbtn.text = "Play Again"
         self.ids.pausebtn.disabled = True
         self.ids.restartbtn.disabled = True
-        
 
     def pause_song(self):
         try:
@@ -813,27 +879,30 @@ class PlaylistScreen(Screen):
             os.chdir('..')
 
     def add_song(self):
-        # new_song = f"Song {len(self.songs) + 1}"
-        # self.songs.append(new_song)
-        selected_file = filechooser.open_file(title="Pick a MP3 file..", 
-                    filters=[("MP3 Audio File", "*.mp3")])
-        print(selected_file[0])
-        if selected_file[0][-4:] == '.mp3':
-            # self.file_label.text = f"Selected File: {selected_file[0]}"
-            # Here, you can add logic to process the file (e.g., upload to a server)
-            print(f'Uploading {selected_file[0][:-4]} file')
-            main_screen = self.manager.get_screen("main")
-            dropdown_text = main_screen.ids.dropdown.text
-            dropdown_text = dropdown_text.replace(' ', '')
-            os.chdir('songs')
-            os.chdir(dropdown_text)
-            shutil.copy(selected_file[0], os.getcwd())
-            print("File successfully uploaded to playlist.")
-            os.chdir('..')
-            os.chdir('..')
-            self.on_enter()
-        else:
-            print("Invalid file. Please ensure an MP3 file is selected.")
+        try:
+            # new_song = f"Song {len(self.songs) + 1}"
+            # self.songs.append(new_song)
+            selected_file = filechooser.open_file(title="Pick a MP3 file..", 
+                        filters=[("MP3 Audio File", "*.mp3")])
+            print(selected_file[0])
+            if selected_file[0][-4:] == '.mp3':
+                # self.file_label.text = f"Selected File: {selected_file[0]}"
+                # Here, you can add logic to process the file (e.g., upload to a server)
+                print(f'Uploading {selected_file[0][:-4]} file')
+                main_screen = self.manager.get_screen("main")
+                dropdown_text = main_screen.ids.dropdown.text
+                dropdown_text = dropdown_text.replace(' ', '')
+                os.chdir('songs')
+                os.chdir(dropdown_text)
+                shutil.copy(selected_file[0], os.getcwd())
+                print("File successfully uploaded to playlist.")
+                os.chdir('..')
+                os.chdir('..')
+                self.on_enter()
+            else:
+                print("Invalid file. Please ensure an MP3 file is selected.")
+        except Exception as e:
+            print(f"Sorry, unable to add song. Error: {e}")
 
 class UploadScreen(Screen):
     def upload_file(self):
@@ -874,6 +943,12 @@ class ScoreScreen(Screen):
         guess_input_text_stripped = guess_input_text.strip()
         title_text_stripped = title_text.strip()
 
+        # Remove special characters from users guess
+        relevant_chars = [',', ';', '.', ':', '(', ')', '\'', '\"', '[', ']']
+        for char in relevant_chars:
+            guess_input_text_stripped = guess_input_text_stripped.replace(char, '')
+
+
         #Show percentage of difference between two strings
         similarity_score = SequenceMatcher(None, guess_input_text_stripped.lower(), title_text_stripped.lower()).ratio() * 100
 
@@ -905,7 +980,23 @@ class ScoreScreen(Screen):
         main_screen.ids.progress.value = 0
         main_screen.ids.status_label.opacity = 0.0
         main_screen.ids.progress.opacity = 0.0
+        main_screen.ids.dropdown.disabled = False
+        main_screen.ids.view_playlist.disabled = False
 
+class AccountScreen(Screen):
+    def pass_this(self):
+        pass
+
+class ColorScreen(Screen):
+    def change_theme(self):
+        # color_screen = self.manager.get_screen("color")
+        # self.background_color = [color_screen.ids.sliderR.value / 255, color_screen.ids.sliderG.value / 255, color_screen.ids.sliderB.value / 255, color_screen.ids.sliderOpacity.value]
+
+        # gts = GuessThatSongApp()
+        # # gts.change_theme(color_screen.ids.sliderR.value / 255, color_screen.ids.sliderG.value / 255, color_screen.ids.sliderB.value / 255, color_screen.ids.sliderOpacity.value)
+        # Clock.schedule_once(lambda dt: gts.change_theme(color_screen.ids.sliderR.value / 255, color_screen.ids.sliderG.value / 255, color_screen.ids.sliderB.value / 255, color_screen.ids.sliderOpacity.value), 0.1)
+        # # print(color_screen.ids.sliderR.value)
+        pass
 
 class MyScreenManager(ScreenManager):
     pass
@@ -914,7 +1005,14 @@ class GuessThatSongApp(App):
     # Properties to hold the current theme and background color.
     theme = StringProperty('light')  # 'light' or 'dark'
     # background_color = ListProperty([0.678, 0.847, 0.902, 1])  # light blue RGBA
-    background_color = ListProperty([1, 0.83, 0, 1])  # magenta RGBA
+    try:
+        with open('user_account.json', 'r') as f:
+            # Loading the json data into a python object
+            json_data = json.load(f)
+            background_color = ListProperty(json_data["background_color"])
+    except Exception as e:
+        print(f"Could not read successfully user_account.json file. Error: {e}")
+        background_color = ListProperty([1, 0.83, 0, 0.5])  # magenta RGBA
 
     def toggle_theme(self):
         # Toggle between light mode (light blue) and dark mode (dark blue)
@@ -925,20 +1023,42 @@ class GuessThatSongApp(App):
         else:
             self.theme = 'light'
             # self.background_color = [0.678, 0.847, 0.902, 1]
-            self.background_color = [1, 0.83, 0, 1] # yellow RGBA
+            self.background_color = [1, 0.83, 0, 0.5] # yellow RGBA
+
+    def change_theme(self, r, g, b, opacity):
+        self.background_color = [r/255, g/255, b/255, opacity]
+        background_color = self.background_color
+        if "user_account.json" not in os.listdir():
+            json_data = {"background_color": self.background_color}
+            with open('user_account.json', 'w') as f:
+                json.dump(json_data, f)
+        else:
+            with open('user_account.json', 'r') as f:
+                # Loading the json data into a python object
+                json_data = json.load(f)
+            json_data["background_color"] = self.background_color
+            with open('user_account.json', 'w') as f:
+                json.dump(json_data, f)
+
+    def change_username(self, username):
+        if "user_account.json" not in os.listdir():
+            json_data = {"username": username}
+            with open('user_account.json', 'w') as f:
+                json.dump(json_data, f)
+        else:
+            with open('user_account.json', 'r') as f:
+                # Loading the json data into a python object
+                json_data = json.load(f)
+            json_data["username"] = username
+            with open('user_account.json', 'w') as f:
+                json.dump(json_data, f)
             
     def build(self):
         print(platform)
         return MyScreenManager()
     
     def on_start(self):
-        # video = self.root.ids.bg_video
-        # print("Video source loaded:", video.source)
-        # print("Video state:", video.state)
         pass
-
-
-
 
 if __name__ == '__main__':
     GuessThatSongApp().run()
