@@ -42,6 +42,7 @@
                     on_press: root.manager.current = "color"; root.set_background_rbg()
 
                 Button:
+                    id: togglevideobtn
                     text: "Toggle Video"
                     size_hint_x: None
                     width: dp(120)
@@ -128,7 +129,8 @@
                 Spinner:
                     id: dropdown
                     text: "Select Playlist"
-                    values: ["Hymns", "Nursery Rhymes", "Custom", "Special"]
+                    # values: ["Hymns", "Nursery Rhymes", "Custom", "Special", "Add Playlist"]
+                    values: root.get_spinner_values()
                     size_hint_y: None
                     height: dp(44)
                     on_text: if dropdown.text != "Select Playlist": root.toggle_view_playlist()
@@ -182,7 +184,7 @@
             id: bg_video
             source: "background_video.mp4"
             options: {"eos": "loop"}
-            state: "play"
+            # state: "play"
             volume: 0
             allow_stretch: True
             keep_ratio: False
@@ -190,8 +192,10 @@
             pos: self.parent.pos
             size_hint: 1, 1
             pos_hint: {"x": 0, "y": 0}
-            state: "play"
-            opacity: 0.1
+            # state: "play"
+            # opacity: 0.1
+            state: "pause"
+            opacity: 0
 
 <PlaylistScreen>:
     name: "playlist"
@@ -390,12 +394,15 @@
             size_hint_y: None
             height: dp(50)
         ScrollView:
-            do_scroll_x: True
-            do_scroll_y: False
+            do_scroll_x: False
+            do_scroll_y: True
             BoxLayout:
                 orientation: "vertical"
                 spacing: dp(10)
                 padding: dp(10)
+                size_hint_y: None
+                # size_hint_x: None
+                height: self.minimum_height
                 BoxLayout:
                     orientation: "horizontal"
                     spacing: dp(10)
@@ -420,7 +427,7 @@
                     text_size: None, None
                     size_hint: None, None
                     size: self.texture_size
-                    text: "Top Songs Guessed Correctly: "
+                    text: "Top Song(s) Guessed Correctly: "
                     font_size: dp(24)
                     size_hint_y: None
                     height: dp(50)
@@ -429,7 +436,7 @@
                     text_size: None, None
                     size_hint: None, None
                     size: self.texture_size
-                    text: "Top Songs Guessed Incorrectly: "
+                    text: "Top Song(s) Guessed Incorrectly: "
                     font_size: dp(24)
                     size_hint_y: None
                     height: dp(50)
@@ -438,7 +445,7 @@
                     text_size: None, None
                     size_hint: None, None
                     size: self.texture_size
-                    text: "Most Commonly Used Key Signature: "
+                    text: "Most Commonly Used Key Signature(s): "
                     font_size: dp(24)
                     size_hint_y: None
                     height: dp(50)
@@ -447,7 +454,7 @@
                     text_size: None, None
                     size_hint: None, None
                     size: self.texture_size
-                    text: "Most Commonly Used Tempo: "
+                    text: "Most Commonly Used Tempo(s): "
                     font_size: dp(24)
                     size_hint_y: None
                     height: dp(50)
@@ -456,7 +463,16 @@
                     text_size: None, None
                     size_hint: None, None
                     size: self.texture_size
-                    text: "Most Commonly Used Level Of Difficulty: "
+                    text: "Most Commonly Used Level Of Difficulty(ies): "
+                    font_size: dp(24)
+                    size_hint_y: None
+                    height: dp(50)
+                Label:
+                    id: averagescoreoverall
+                    text_size: None, None
+                    size_hint: None, None
+                    size: self.texture_size
+                    text: "Average Score (Overall): "
                     font_size: dp(24)
                     size_hint_y: None
                     height: dp(50)
@@ -542,6 +558,50 @@
     #     state: "play"
     #     opacity: 0.1
 
+
+<PlaylistDeleteScreen>:
+    name: "playlistdelete"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(10)
+        padding: dp(10)
+        canvas.before:
+            Color:
+                rgba: app.background_color
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        Label:
+            text: "Playlist"
+            font_size: dp(24)
+            size_hint_y: None
+            height: dp(50)
+
+        RecycleView:
+            id: playlist_rv
+            viewclass: "SongItem"
+            # The RecycleBoxLayout arranges items vertically.
+            RecycleBoxLayout:
+                default_size: None, dp(40)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
+
+        BoxLayout:
+            orientation: "horizontal"
+            Button:
+                text: "Delete Playlist"
+                size_hint_y: None
+                height: dp(50)
+                # on_press: root.add_song()
+
+            Button:
+                text: "Back"
+                size_hint_y: None
+                height: dp(50)
+                on_press: root.manager.current = "main"
 
 
 <SongItem>:

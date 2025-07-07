@@ -10,6 +10,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.textinput import TextInput
 
 import shutil
 from random import randint
@@ -34,6 +35,7 @@ from kivy.core.audio import SoundLoader
 from kivy.uix.progressbar import ProgressBar
 import time
 # import psutil
+import pandas as pd
 
 if platform == "android":
     from android.storage import app_storage_path
@@ -106,11 +108,40 @@ class MainScreen(Screen):
     media_player = None
     cap_counter = 0
     cap_percentage = 0.0
+    new_playlist_name = ""
+
+    def __init__(self, **kw):
+        # super().__init__(**kw)
+        super(MainScreen, self).__init__()
+        # self.ids.dropdown.values = os.listdir("songs")
+        self.update_spinner_values(os.listdir("songs"))
+        print(f"Dropdown values: {self.ids.dropdown.values}")
+        print(platform)
+
+        #### Testing
+        # Disable video button and hide video if android device is used
+        if platform == "win":
+            self.toggle_video()
+        self.ids.bg_video.state = "pause"
+        self.ids.bg_video.opacity = 0
+        self.remove_widget(self.ids.bg_video)
+        self.ids.bg_video.texture = None
+
+
+    def update_spinner_values(self, new_values):
+        # Update the Spinner's values
+        self.ids.dropdown.values = new_values
+
+    def get_spinner_values(self):
+        return os.listdir("songs") + ["Add Playlist", "Remove Playlist"]
 
     def toggle_video(self):
         if self.ids.bg_video.state == "play":
            self.ids.bg_video.state = "pause"
-           self.ids.bg_video.opacity = 0.0
+           self.ids.bg_video.opacity = 0
+           self.remove_widget(self.ids.bg_video)
+           self.ids.bg_video.texture = None
+
         else:
            self.ids.bg_video.state = "play"
            self.ids.bg_video.opacity = 0.1
@@ -154,16 +185,104 @@ class MainScreen(Screen):
                 # Loading the json data into a python object
                 json_data = json.load(f)
             account_screen.ids.usernametext.text = json_data["username"]
-            tmp_dir = os.getcwd()
-            try:
-                os.chdir("data")
-                print(os.listdir())
-                os.chdir("..")
-            except Exception as e:
-                print("Error: {e}")
-                os.chdir(tmp_dir)
         except Exception as e:
             print(f"Unable to pull up saved username. Error: {e}")
+
+        tmp_dir = os.getcwd()
+        try:
+            try:
+               os.chdir("data")
+            except Exception as e:
+                print(f"Data folder does not exist. Creating it now: {e}")
+                os.mkdir("data") # Make directory if it does not exist
+                os.chdir("data")
+            if os.listdir() != []:
+                data = []
+                # df = pd.DataFrame(columns=["timestamp", "tempo", 
+                #     "key", "level_of_difficulty", "random_song_chosen", 
+                #     "user_guess", "user_score"])
+                # Loop through all files in the directory
+                for file_name in os.listdir():
+                    if file_name.endswith(".json"):  # Check if the file is a JSON file
+                        file_path = os.path.join(os.getcwd(), file_name)
+                        with open(file_path, 'r') as file:
+                            json_data = json.load(file)  # Load JSON data
+                            data.append(json_data)      # Append to the list
+
+                # Create a DataFrame from the list of JSON data
+                df = pd.DataFrame(data)
+
+                # Add columns to DataFrame
+                df["correct_guess"] = [True if x >= 80 else False for x in df["user_score"]]
+
+                topcorrectsongs = df[df["correct_guess"] == True]["random_song_chosen"].mode().tolist()
+                account_screen.ids.topcorrectsongs.text = "Top Song(s) Guessed Correctly:" + "\n".join(topcorrectsongs)
+                print("; ".join(topcorrectsongs))
+
+                topincorrectsongs = df[df["correct_guess"] == False]["random_song_chosen"].mode().tolist()
+                account_screen.ids.topincorrectsongs.text = "Top Song(s) Guessed Incorrectly: " + "\n".join(topincorrectsongs)
+                print("; ".join(topincorrectsongs))
+
+                mostcommonkey = df["key"].mode().tolist()
+                mostcommonkey = [str(val) for val in mostcommonkey]
+                account_screen.ids.mostcommonkey.text = "Most Commonly Used Key Signature(s): " + "\n".join(mostcommonkey)
+                print("; ".join(mostcommonkey))
+
+                mostcommontempo = df["tempo"].mode().tolist()
+                mostcommontempo = [str(val) for val in mostcommontempo]
+                account_screen.ids.mostcommontempo.text = "Most Commonly Used Tempo(s): " + "\n".join(mostcommontempo)
+                print("; ".join(mostcommontempo))
+
+                mostcommonlod = df["level_of_difficulty"].mode().tolist()
+                mostcommonlod = [str(val) for val in mostcommonlod]
+                account_screen.ids.mostcommonlod.text = "Most Commonly Used Level Of Difficulty(ies): " + "\n".join(mostcommonlod)
+                print("; ".join(mostcommonlod))
+
+                averagescoreoverall = df["user_score"].sum() / len(df)
+                account_screen.ids.averagescoreoverall.text = f"Average Score (Overall): {averagescoreoverall}"
+                print(averagescoreoverall)
+
+                # Display the DataFrame
+                print(df)
+
+            os.chdir("..")
+        except Exception as e:
+            print(f"Error: {e}")
+            os.chdir(tmp_dir)
+
+    def create_new_playlist(self):
+        # Remove periods, spaces, and special characters from playlist name
+        relevant_chars = [',', ';', '.', ':', '(', ')', '\'', '\"', '[', ']', 
+            ' ', '-', '=', '!', '@', '#', '$', '%', '^', '&', '*', '+']
+        for char in relevant_chars:
+            self.new_playlist_name.text = self.new_playlist_name.text.replace(char, '')
+
+        if self.new_playlist_name != "":
+            tmp_dir = os.getcwd()
+            try:
+                os.chdir("songs")
+                os.mkdir(self.new_playlist_name.text)
+                os.chdir("..")
+            except Exception as e:
+                print(f"Error: {e}")
+                os.chdir(tmp_dir)
+
+    def delete_playlist(self):
+        # Remove periods, spaces, and special characters from playlist name
+        relevant_chars = [',', ';', '.', ':', '(', ')', '\'', '\"', '[', ']', 
+            ' ', '-', '=', '!', '@', '#', '$', '%', '^', '&', '*', '+']
+        for char in relevant_chars:
+            self.deleted_playlist_name.text = self.deleted_playlist_name.text.replace(char, '')
+
+        if self.deleted_playlist_name != "":
+            tmp_dir = os.getcwd()
+            try:
+                os.chdir("songs")
+                os.rmdir(self.deleted_playlist_name.text)
+                os.chdir("..")
+            except Exception as e:
+                print(f"Error: {e}")
+                os.chdir(tmp_dir)
 
     def toggle_view_playlist(self):
         self.ids.view_playlist.disabled = False
@@ -179,6 +298,34 @@ class MainScreen(Screen):
             self.ids.slider1.disabled = True
             self.ids.slider2.value = 0
             self.ids.slider2.disabled = True
+        elif self.ids.dropdown.text == "Add Playlist":
+            content = BoxLayout(orientation='vertical')
+            popup = Popup(title='Enter Playlist Name', 
+                            content=content)
+            scroll_error_1 = ScrollView(size_hint=(1, 0.8))
+            scroll_error_1.add_widget(WrappedLabel(text = f"Please enter a new playlist name below", size_hint=(1, None)))
+            content.add_widget(scroll_error_1)
+            self.new_playlist_name = TextInput(hint_text="Playlist name goes here")
+            content.add_widget(self.new_playlist_name)
+            error_btn_1 = Button(text='OK', on_press=lambda x: (self.create_new_playlist(), self.update_spinner_values(os.listdir("songs") + ["Add Playlist", "Remove Playlist"]), popup.dismiss()), size_hint_y=0.2)
+            self.ids.dropdown.text = "Select Playlist"
+            self.ids.playbtn.disabled = True
+            content.add_widget(error_btn_1)
+            popup.open()
+        elif self.ids.dropdown.text == "Remove Playlist":  
+            content = BoxLayout(orientation='vertical')
+            popup = Popup(title='Delete Playlist', 
+                            content=content)
+            scroll_error_1 = ScrollView(size_hint=(1, 0.8))
+            scroll_error_1.add_widget(WrappedLabel(text = f"Please enter the name of the playlist that will be deleted", size_hint=(1, None)))
+            content.add_widget(scroll_error_1)
+            self.deleted_playlist_name = TextInput(hint_text="Playlist name that will be deleted goes here")
+            content.add_widget(self.deleted_playlist_name)
+            error_btn_1 = Button(text='OK', on_press=lambda x: (self.delete_playlist(), self.update_spinner_values(os.listdir("songs") + ["Add Playlist", "Remove Playlist"]), popup.dismiss()), size_hint_y=0.2)
+            self.ids.dropdown.text = "Select Playlist"
+            self.ids.playbtn.disabled = True
+            content.add_widget(error_btn_1)
+            popup.open()
         else:
             self.ids.sliderA.disabled = False
             self.ids.slider1.disabled = False
@@ -211,6 +358,9 @@ class MainScreen(Screen):
             # self.ids.restartbtn.disabled = False
             dropdown_text = self.ids.dropdown.text
             dropdown_text = dropdown_text.replace(' ', '')
+
+            
+
             print(f'Before chdir into songs')
             print(os.listdir())
             os.chdir('songs')
@@ -225,7 +375,9 @@ class MainScreen(Screen):
                 try:
                     print("*****************FOR LOOP************")
                     print(os.listdir())
-                    music_dirs = ["Hymns", "NurseryRhymes", "Custom", "Special"]
+                    # music_dirs = ["Hymns", "NurseryRhymes", "Custom", "Special", "Add Playlist"]
+                    music_dirs = os.listdir()
+                    # Add "Add Playlist" & "Remove Playlist" options to "Playlist Options"
                     for directory in music_dirs:
                         try:
                             os.chdir(directory)
@@ -966,9 +1118,26 @@ class ScoreScreen(Screen):
         print("User log: ")
         print(user_log)
 
-        # Write dictionary to a JSON file
-        with open(f".\\data\\{user_log['timestamp']}_{uuid.uuid4()}.json", "w") as json_file:
-            json.dump(user_log, json_file, indent=4)  # 'indent' makes the JSON file 
+        if platform == "android":
+            tmp_directory = os.getcwd()
+            try:
+                try:
+                    os.chdir("data")
+                except Exception as e:
+                    print(f"Data folder does not exist. Creating it now: {e}")
+                    os.mkdir("data") # Make directory if it does not exist
+                    os.chdir("data")
+                # Write dictionary to a JSON file
+                with open(f"{user_log['timestamp']}_{uuid.uuid4()}.json", "w") as json_file:
+                    json.dump(user_log, json_file, indent=4)  # 'indent' makes the JSON file
+                os.chdir("..")
+            except Exception as e:
+                print(f"Error: {e}")
+                os.chdir(tmp_directory)
+        else:
+            # Write dictionary to a JSON file
+            with open(f".\\data\\{user_log['timestamp']}_{uuid.uuid4()}.json", "w") as json_file:
+                json.dump(user_log, json_file, indent=4)  # 'indent' makes the JSON file 
 
         main_screen.ids.guess_input.text = ""
         main_screen.ids.playbtn.text = "Play"
@@ -984,6 +1153,10 @@ class ScoreScreen(Screen):
         main_screen.ids.view_playlist.disabled = False
 
 class AccountScreen(Screen):
+    def pass_this(self):
+        pass
+
+class PlaylistDeleteScreen(Screen):
     def pass_this(self):
         pass
 

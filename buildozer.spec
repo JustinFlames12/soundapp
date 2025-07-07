@@ -17,7 +17,7 @@ source.include_exts = py,png,jpg,kv,atlas,wav,csv,json,so,mp3,mp4
 
 # (list) List of inclusions using pattern matching
 #source.include_patterns = assets/*,images/*.png
-include_patterns = _soundfile_data/*.so,assets/libsndfile_arm64.so
+include_patterns = _soundfile_data/*.so,assets/libsndfile_arm64.so,assets/libsndfile_armv7l.so
 
 # (list) Source files to exclude (let empty to not exclude anything)
 #source.exclude_exts = spec
@@ -30,7 +30,7 @@ include_patterns = _soundfile_data/*.so,assets/libsndfile_arm64.so
 #source.exclude_patterns = license,images/*/*.jpg
 
 # (str) Application versioning (method 1)
-version = 0.1.9
+version = 0.1.10
 
 # (str) Application versioning (method 2)
 # version.regex = __version__ = ['"](.*)['"]
@@ -38,7 +38,7 @@ version = 0.1.9
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,librosa,numpy,soundfile,wave,datetime,plyer,ffpyplayer,pydub,lazy_loader,cffi,ffmpeg,pyjnius,android,audioread,audiotsm,ffmpeg-python,future
+requirements = python3,kivy,librosa,numpy,soundfile,wave,datetime,plyer,ffpyplayer,pydub,lazy_loader,cffi,ffmpeg,pyjnius,android,audioread,audiotsm,ffmpeg-python,future,pandas
 
 
 # (str) Custom source folders for requirements
