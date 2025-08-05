@@ -22,48 +22,54 @@
                 Rectangle:
                     pos: self.pos
                     size: self.size
-
             # Header with app title and toggle theme button.
             BoxLayout:
-                size_hint_y: None
-                height: dp(50)
-                spacing: dp(10)
-                Button:
-                    text: "Account Info"
+                size_hint_y: 0.16
+                padding: dp(10)
+                orientation: 'horizontal'
+                # This will push your inner box to the center horizontally
+                Widget:
+                    size_hint_x: 1
+                BoxLayout:
+                    orientation: 'horizontal'
                     size_hint_x: None
-                    width: dp(120)
-                    on_press: root.manager.current = "account"; root.set_username()
-                
-                Button:
-                    text: "Choose Theme"
-                    size_hint_x: None
-                    width: dp(120)
-                    # on_press: app.toggle_theme()
-                    on_press: root.manager.current = "color"; root.set_background_rbg()
-
-                Button:
-                    id: togglevideobtn
-                    text: "Toggle Video"
-                    size_hint_x: None
-                    width: dp(120)
-                    on_press: root.toggle_video()
-
-
+                    width: self.minimum_width
+                    spacing: dp(10)
+                    Button:
+                        text: "Account Info"
+                        size_hint_x: None
+                        width: dp(120)
+                        on_press: root.manager.current = "account"; root.set_username()
+                    Button:
+                        text: "Choose Theme"
+                        size_hint_x: None
+                        width: dp(120)
+                        on_press: root.manager.current = "color"; root.set_background_rbg()
+                    Button:
+                        id: togglevideobtn
+                        text: "Toggle Video"
+                        size_hint_x: None
+                        width: dp(120)
+                        on_press: root.toggle_video()
+                        opacity: 0 if root.is_android else 1
+                        disabled: True if root.is_android else False
+                Widget:
+                    size_hint_x: 1
+            BoxLayout:
+                size_hint_y: 0.01
+                orientation:"vertical"
+                Label:
+                    text: "Guess That Song"
+                    font_size: dp(20)
+                    halign: "left"
             # Row for Pitch Slider
             BoxLayout:
                 orientation: "vertical"
                 spacing: dp(5)
-                size_hint_y: None
-                height: dp(100)
+                size_hint_y: 0.16
                 Label:
-                    text: "Guess That Song"
-                    font_size: dp(24)
-                    halign: "left"
-            
-                Label:
-                    text: "Pitch (Semitone) " + str(sliderA.value)
-                    size_hint_y: None
-                    height: dp(30)
+                    id: labelpitch
+                    text: root.pitch_text
                 Slider:
                     id: sliderA
                     min: -12
@@ -72,17 +78,15 @@
                     step: 1
                     value_track: True
                     value_track_color: 0.086, 0.094, 0.090, 1 
-
+                    on_value: root.set_label_pitch(self.value)
             # Tempo slider section
             BoxLayout:
                 orientation: "vertical"
                 spacing: dp(5)
-                size_hint_y: None
-                height: dp(100)
+                size_hint_y: 0.16
                 Label:
-                    text: "Tempo: " + str(slider1.value)
-                    size_hint_y: None
-                    height: dp(30)
+                    id: labeltempo
+                    text: root.tempo_text
                 Slider:
                     id: slider1
                     min: 0.75
@@ -91,17 +95,15 @@
                     step: 0.05
                     value_track: True
                     value_track_color: 0.086, 0.094, 0.090, 1 
-
+                    on_value: root.set_label_tempo(self.value)
             # Difficulty slider section
             BoxLayout:
                 orientation: "vertical"
                 spacing: dp(5)
-                size_hint_y: None
-                height: dp(100)
+                size_hint_y: 0.16
                 Label:
-                    text: "Difficulty: " + str(slider2.value)
-                    size_hint_y: None
-                    height: dp(30)
+                    id: labellod
+                    text: root.lod_text
                 Slider:
                     id: slider2
                     min: 0
@@ -110,41 +112,26 @@
                     step: 1
                     value_track: True
                     value_track_color: 0.086, 0.094, 0.090, 1 
-                ProgressBar:
-                    id: progress
-                    max: 10  # Number of steps
-                    value: 0
-                    opacity: 0.0
-                Label:
-                    id: status_label
-                    text: '0'
-                    opacity: 0.0
-
+                    on_value: root.set_label_lod(self.value)
             # Dropdown and View Playlist button row
             BoxLayout:
-                size_hint_y: None
-                height: dp(50)
+                size_hint_y: 0.1
                 spacing: dp(10)
                 orientation: "horizontal"
                 Spinner:
                     id: dropdown
                     text: "Select Playlist"
-                    # values: ["Hymns", "Nursery Rhymes", "Custom", "Special", "Add Playlist"]
                     values: root.get_spinner_values()
-                    size_hint_y: None
-                    height: dp(44)
                     on_text: if dropdown.text != "Select Playlist": root.toggle_view_playlist()
                 Button:
                     id: view_playlist
                     text: "View Playlist"
                     on_press: root.manager.current = "playlist"
                     disabled: root.view_playlist_condition
-
             # Row of media control buttons.
             BoxLayout:
                 orientation: "horizontal"
-                size_hint_y: None
-                height: dp(50)
+                size_hint_y: 0.1
                 spacing: dp(10)
                 Button:
                     id: playbtn
@@ -161,30 +148,24 @@
                     text: "Restart"
                     disabled: True
                     on_press: root.restart_song()
-
             # TextInput for the guess.
             TextInput:
                 id: guess_input
                 hint_text: "Place your guess here"
                 multiline: False
-                size_hint_y: None
-                height: dp(40)
-
+                size_hint_y: 0.1
             # Submit button to switch to the playlist screen.
             Button:
                 id: submitbtn
                 text: "Submit"
                 disabled: True
-                size_hint_y: None
-                height: dp(50)
+                size_hint_y: 0.05
                 on_press: root.manager.current = "score"; app.root.get_screen("score").getscore()
-        
         # Video widget as the background
         Video:
             id: bg_video
             source: "background_video.mp4"
             options: {"eos": "loop"}
-            # state: "play"
             volume: 0
             allow_stretch: True
             keep_ratio: False
@@ -192,8 +173,6 @@
             pos: self.parent.pos
             size_hint: 1, 1
             pos_hint: {"x": 0, "y": 0}
-            # state: "play"
-            # opacity: 0.1
             state: "pause"
             opacity: 0
 
@@ -209,13 +188,11 @@
             Rectangle:
                 pos: self.pos
                 size: self.size
-
         Label:
             text: "Playlist"
             font_size: dp(24)
             size_hint_y: None
             height: dp(50)
-
         RecycleView:
             id: playlist_rv
             viewclass: "SongItem"
@@ -226,7 +203,6 @@
                 size_hint_y: None
                 height: self.minimum_height
                 orientation: "vertical"
-
         BoxLayout:
             orientation: "horizontal"
             Button:
@@ -234,27 +210,11 @@
                 size_hint_y: None
                 height: dp(50)
                 on_press: root.add_song()
-
             Button:
                 text: "Back"
                 size_hint_y: None
                 height: dp(50)
                 on_press: root.manager.current = "main"
-    # # Video widget as the background
-    # Video:
-    #     id: bg_video
-    #     source: "background_video.mp4"
-    #     options: {"eos": "loop"}
-    #     state: "play"
-    #     volume: 0
-    #     allow_stretch: True
-    #     keep_ratio: False
-    #     size: self.parent.size
-    #     pos: self.parent.pos
-    #     size_hint: 1, 1
-    #     pos_hint: {"x": 0, "y": 0}
-    #     state: "play"
-    #     opacity: 0.1
         
 <UploadScreen>:
     name: "upload"
@@ -320,7 +280,6 @@
             step: 1
             value_track: True
             value_track_color: 0.086, 0.094, 0.090, 1 
-
         Label:
             text: "G: " + str(sliderG.value)
             size_hint_y: None
@@ -333,7 +292,6 @@
             step: 1
             value_track: True
             value_track_color: 0.086, 0.094, 0.090, 1 
-
         Label:
             text: "B: " + str(sliderB.value)
             size_hint_y: None
@@ -346,7 +304,6 @@
             step: 1
             value_track: True
             value_track_color: 0.086, 0.094, 0.090, 1 
-
         Label:
             text: "Opacity: " + str(sliderOpacity.value)
             size_hint_y: None
@@ -359,7 +316,6 @@
             step: 0.01
             value_track: True
             value_track_color: 0.086, 0.094, 0.090, 1 
-        
         BoxLayout:
             orientation: "horizontal"
             Button:
@@ -368,13 +324,11 @@
                 height: dp(50)
                 # on_press: root.add_song()
                 on_press: app.change_theme(sliderR.value, sliderG.value, sliderB.value, sliderOpacity.value)
-
             Button:
                 text: "Back"
                 size_hint_y: None
                 height: dp(50)
                 on_press: root.manager.current = "main"
-
 
 <AccountScreen>:
     name: "account"
@@ -394,34 +348,29 @@
             size_hint_y: None
             height: dp(50)
         ScrollView:
-            do_scroll_x: False
+            do_scroll_x: True
             do_scroll_y: True
             BoxLayout:
                 orientation: "vertical"
                 spacing: dp(10)
                 padding: dp(10)
                 size_hint_y: None
-                # size_hint_x: None
+                size_hint_x: None
                 height: self.minimum_height
-                BoxLayout:
-                    orientation: "horizontal"
-                    spacing: dp(10)
-
-                    Label:
-                        id: usernamelabel
-                        text_size: None, None
-                        size_hint: None, None
-                        text: "Username: "
-                        font_size: dp(24)
-                        size_hint_y: None
-                        height: dp(50)
-                    TextInput:
-                        id: usernametext
-                        hint_text: "Put your username here"
-                        multiline: False
-                        size_hint_y: None
-                        height: dp(40)
-
+                width: self.minimum_width
+                Label:
+                    id: usernamelabel
+                    text_size: None, None
+                    text: "Username: "
+                    font_size: dp(24)
+                    size_hint_y: None
+                    height: dp(50)
+                TextInput:
+                    id: usernametext
+                    hint_text: "Put your username here"
+                    multiline: False
+                    size_hint_y: None
+                    height: dp(40)
                 Label:
                     id: topcorrectsongs
                     text_size: None, None
@@ -476,6 +425,77 @@
                     font_size: dp(24)
                     size_hint_y: None
                     height: dp(50)
+        ScrollView:
+            do_scroll_x: True
+            do_scroll_y: True
+            GridLayout:
+                id: gridlayouttable
+                cols: 10
+                size_hint: None, None
+                height: self.minimum_height
+                width: self.minimum_width * 1.5
+                row_default_height: 100
+                col_default_width: 200
+                Label:
+                    text: 'Timestamp'
+                    id:  gridtimestamp
+                    bold: True
+                    size_hint_y: None
+                    height: self.texture_size[1] + 20  # Padding for visibility
+                Label:
+                    text: 'Tempo'
+                    id:  gridtempo
+                    bold: True
+                    size_hint_y: None
+                    height: self.texture_size[1] + 20  # Padding for visibility
+                Label:
+                    text: 'Key'
+                    id:  gridkey
+                    bold: True
+                    size_hint_y: None
+                    height: self.texture_size[1] + 20  # Padding for visibility
+                Label:
+                    text: 'Level Of Difficulty'
+                    id:  gridlod
+                    bold: True
+                    size_hint_y: None
+                    height: self.texture_size[1] + 20  # Padding for visibility
+                Label:
+                    text: 'Random Song Chosen'
+                    id:  gridrsc
+                    bold: True
+                    size_hint_y: None
+                    height: self.texture_size[1] + 20  # Padding for visibility
+                Label:
+                    text: 'User Guess'
+                    id:  gridug
+                    bold: True
+                    size_hint_y: None
+                    height: self.texture_size[1] + 20  # Padding for visibility
+                Label:
+                    text: 'User Score'
+                    id:  gridus
+                    bold: True
+                    size_hint_y: None
+                    height: self.texture_size[1] + 20  # Padding for visibility
+                Label:
+                    text: 'Correct Guess'
+                    id:  gridlcg
+                    bold: True
+                    size_hint_y: None
+                    height: self.texture_size[1] + 20  # Padding for visibility
+                Label:
+                    text: 'Song Popularity'
+                    id:  gridsp
+                    bold: True
+                    size_hint_y: None
+                    height: self.texture_size[1] + 20  # Padding for visibility
+                Label:
+                    text: 'Times Played'
+                    id:  gridtp
+                    bold: True
+                    size_hint_y: None
+                    height: self.texture_size[1] + 20  # Padding for visibility
         BoxLayout:
             orientation: "horizontal"
             Button:
@@ -489,21 +509,6 @@
                 size_hint_y: None
                 height: dp(50)
                 on_press: root.manager.current = "main"
-    # # Video widget as the background
-    # Video:
-    #     id: bg_video
-    #     source: "background_video.mp4"
-    #     options: {"eos": "loop"}
-    #     state: "play"
-    #     volume: 0
-    #     allow_stretch: True
-    #     keep_ratio: False
-    #     size: self.parent.size
-    #     pos: self.parent.pos
-    #     size_hint: 1, 1
-    #     pos_hint: {"x": 0, "y": 0}
-    #     state: "play"
-    #     opacity: 0.1
 
 <ScoreScreen>:
     name: "score"
@@ -540,24 +545,9 @@
                 text: "Back"
                 size_hint_y: None
                 height: dp(50)
-                on_press: root.manager.current = "main"
-
-    # # Video widget as the background
-    # Video:
-    #     id: bg_video
-    #     source: "background_video.mp4"
-    #     options: {"eos": "loop"}
-    #     state: "play"
-    #     volume: 0
-    #     allow_stretch: True
-    #     keep_ratio: False
-    #     size: self.parent.size
-    #     pos: self.parent.pos
-    #     size_hint: 1, 1
-    #     pos_hint: {"x": 0, "y": 0}
-    #     state: "play"
-    #     opacity: 0.1
-
+                # on_press: root.manager.current = "main"
+                # on_press: root.restart_app() # Workaround for playing 2+ songs on same run
+                on_press: root.manager.current = "main" if root.is_android else root.restart_app()
 
 <PlaylistDeleteScreen>:
     name: "playlistdelete"
@@ -571,13 +561,11 @@
             Rectangle:
                 pos: self.pos
                 size: self.size
-
         Label:
             text: "Playlist"
             font_size: dp(24)
             size_hint_y: None
             height: dp(50)
-
         RecycleView:
             id: playlist_rv
             viewclass: "SongItem"
@@ -588,21 +576,17 @@
                 size_hint_y: None
                 height: self.minimum_height
                 orientation: "vertical"
-
         BoxLayout:
             orientation: "horizontal"
             Button:
                 text: "Delete Playlist"
                 size_hint_y: None
                 height: dp(50)
-                # on_press: root.add_song()
-
             Button:
                 text: "Back"
                 size_hint_y: None
                 height: dp(50)
                 on_press: root.manager.current = "main"
-
 
 <SongItem>:
     orientation: "horizontal"
@@ -618,6 +602,3 @@
         size_hint_x: None
         width: dp(80)
         on_press: app.root.get_screen('playlist').remove_song(root.song_name)
-        
-
-

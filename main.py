@@ -1,16 +1,22 @@
 import os
+home_app_dir = os.getcwd()
 os.environ["KIVY_VIDEO"] = "ffpyplayer"
 
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.boxlayout import BoxLayout
-from kivy.properties import StringProperty, ListProperty
+from kivy.properties import StringProperty, ListProperty, BooleanProperty
 from kivy.clock import Clock
 from kivy.uix.popup import Popup 
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
+from kivy.uix.video import Video
+from kivy.uix.image import Image
+
+
+
 
 import shutil
 from random import randint
@@ -36,11 +42,16 @@ from kivy.uix.progressbar import ProgressBar
 import time
 # import psutil
 import pandas as pd
+import math
+import re
+import stat
 
 if platform == "android":
     from android.storage import app_storage_path
     from jnius import autoclass, PythonJavaClass, java_method
 
+
+    Image.use_pil = True
     print("Changing permissions for FFMPEG")
     import os, stat
     ffmpeg_path = "ffmpeg-android"  # update with your actual path
@@ -85,7 +96,81 @@ if platform == "android":
     # Set environment variable so ctypes can find it
     os.environ["LD_LIBRARY_PATH"] = f"{dest_dir}:{os.environ.get('LD_LIBRARY_PATH', '')}"
 
+    from os import chmod
+    ffprobe_path =  os.path.join(home_app_dir, "assets", "ffprobe")
+    # chmod(ffprobe_path, 0o755)
+    # Make sure it’s executable
+    os.chmod(ffprobe_path, os.stat(ffprobe_path).st_mode | stat.S_IEXEC)
+
+    # Patch pydub to use this version
+    from pydub.utils import get_prober_name
+    def custom_prober():
+        return ffprobe_path
+    import pydub.utils
+    pydub.utils.get_prober_name = custom_prober
+
+
+
 import soundfile as sf
+
+from audiotsm import phasevocoder
+from audiotsm.io.wav import WavReader, WavWriter
+
+def extract_frame_number(path):
+    # Extracts the number after 'frame_' in something like 'frame_001_delay-0.1s.png'
+    match = re.search(r'frame_(\d+)_', os.path.basename(path))
+    return int(match.group(1)) if match else -1  # default to -1 if not matched
+
+class AnimatedPopup:
+    def __init__(self):
+        self.frame_index = 0
+        self.anim_delay = 0.25 / 10.0  # 10 FPS
+
+        if platform == "win":
+            # FIXED: use forward slashes in paths for Kivy
+            self.frames = sorted([
+                os.path.join(home_app_dir, 'anim_frames', fname).replace("\\", "/")  # <-- key fix
+                for fname in os.listdir('anim_frames')
+                if fname.endswith('.png')
+            ], key=extract_frame_number)
+            # print(self.frames)
+        else:
+            # Load all valid frame paths
+            self.frames = sorted([
+                os.path.join('anim_frames', fname)
+                for fname in os.listdir('anim_frames')
+                if fname.endswith('.png')
+            ], key=lambda x: int(re.search(r'frame_(\d+)_', x).group(1)))
+
+        # Setup image and popup
+        self.image_widget = Image()
+        self.image_widget.source = self.frames[0]
+        self.image_widget.allow_stretch = True
+        self.image_widget.keep_ratio = False
+
+        self.popup = Popup(title="Loading Animation",
+                           content=self.image_widget,
+                           size_hint=(0.6, 0.6),
+                           auto_dismiss=False)
+
+        self.clock_event = None
+
+    def open(self):
+        self.popup.open()
+        self.clock_event = Clock.schedule_interval(self.update_frame, self.anim_delay)
+
+    def dismiss(self):
+        if self.clock_event:
+            self.clock_event.cancel()
+        
+        self.popup.dismiss()
+        
+
+    def update_frame(self, dt):
+        self.frame_index = (self.frame_index + 1) % len(self.frames)
+        next_frame = self.frames[self.frame_index]
+        self.image_widget.source = next_frame
+        self.image_widget.reload()
 
 class WrappedLabel(Label):
     # Based on Tshirtman's answer
@@ -109,6 +194,13 @@ class MainScreen(Screen):
     cap_counter = 0
     cap_percentage = 0.0
     new_playlist_name = ""
+    is_android = BooleanProperty(platform == 'android')
+    pitch_text = StringProperty()
+    tempo_text = StringProperty()
+    lod_text = StringProperty()
+    processing = False
+    CLAP_WAV_PATH = 'clap.wav'
+    home_dir = os.getcwd()
 
     def __init__(self, **kw):
         # super().__init__(**kw)
@@ -117,6 +209,7 @@ class MainScreen(Screen):
         self.update_spinner_values(os.listdir("songs"))
         print(f"Dropdown values: {self.ids.dropdown.values}")
         print(platform)
+
 
         #### Testing
         # Disable video button and hide video if android device is used
@@ -127,6 +220,9 @@ class MainScreen(Screen):
         self.remove_widget(self.ids.bg_video)
         self.ids.bg_video.texture = None
 
+        self.pitch_text = f"Pitch (Semitione): 0"  # Initial value
+        self.tempo_text = f"Tempo: {1.00}"  # Initial value
+        self.lod_text = f"Difficulty: 0"  # Initial value
 
     def update_spinner_values(self, new_values):
         # Update the Spinner's values
@@ -136,30 +232,51 @@ class MainScreen(Screen):
         return os.listdir("songs") + ["Add Playlist", "Remove Playlist"]
 
     def toggle_video(self):
-        if self.ids.bg_video.state == "play":
-           self.ids.bg_video.state = "pause"
-           self.ids.bg_video.opacity = 0
-           self.remove_widget(self.ids.bg_video)
-           self.ids.bg_video.texture = None
+        if platform != "android": 
+            try:
+                if self.ids.bg_video.state == "play":
+                    self.ids.bg_video.state = "pause"
+                    self.ids.bg_video.opacity = 0
+                    self.remove_widget(self.ids.bg_video)
+                    self.ids.bg_video.texture = None
+                else:
+                    self.ids.bg_video.state = "play"
+                    self.ids.bg_video.opacity = 0.1
+            except Exception as e:
+                content = BoxLayout(orientation='vertical')
+                popup = Popup(title='ERROR', 
+                                content=content)
+                scroll_error_1 = ScrollView(size_hint=(1, 0.8))
+                scroll_error_1.add_widget(WrappedLabel(text = f"Unable to toggle video.\n{e}", size_hint=(1, None)))
+                content.add_widget(scroll_error_1)
+                error_btn_1 = Button(text='OK', on_press=popup.dismiss, size_hint_y=0.2)
+                content.add_widget(error_btn_1)
+                popup.open()
+        
+    def set_label_pitch(self, value):
+        self.pitch_text = f"Pitch (Semitione): {round(value, 1)}"
 
-        else:
-           self.ids.bg_video.state = "play"
-           self.ids.bg_video.opacity = 0.1
+    def set_label_tempo(self, value):
+        self.tempo_text = f"Tempo: {round(value, 2)}"
+        
+    def set_label_lod(self, value):
+        self.lod_text = f"Difficulty: {round(value, 1)}"
 
     def next_progress_step(self):
-        if self.ids.status_label.opacity == 0.0:
-            self.ids.status_label.opacity = 1.0
+        # if self.ids.status_label.opacity == 0.0:
+        #     self.ids.status_label.opacity = 1.0
 
-        if self.ids.progress.opacity == 0.0:
-            self.ids.progress.opacity = 1.0
+        # if self.ids.progress.opacity == 0.0:
+        #     self.ids.progress.opacity = 1.0
 
-        # self.ids.status_label.text = str(round((float(self.ids.status_label.text) + 1 / self.ids.progress.max), 2))
-        self.cap_percentage = (self.cap_counter + 1 / self.ids.progress.max) * 100
-        self.cap_counter += 1
-        self.ids.status_label.text = f"Loading Song: {round(self.cap_percentage, 2)}%"
-        if float(self.cap_percentage) >= 100:
-            self.ids.status_label.text = "Done Loading Song"
-        self.ids.progress.value += 1
+        # # self.ids.status_label.text = str(round((float(self.ids.status_label.text) + 1 / self.ids.progress.max), 2))
+        # self.cap_percentage = (self.cap_counter + 1 / self.ids.progress.max) * 100
+        # self.cap_counter += 1
+        # self.ids.status_label.text = f"Loading Song: {round(self.cap_percentage, 2)}%"
+        # if float(self.cap_percentage) >= 100:
+        #     self.ids.status_label.text = "Done Loading Song"
+        # self.ids.progress.value += 1
+        pass
 
     def set_background_rbg(self):
         color_screen = self.manager.get_screen("color")
@@ -215,6 +332,28 @@ class MainScreen(Screen):
                 # Add columns to DataFrame
                 df["correct_guess"] = [True if x >= 80 else False for x in df["user_score"]]
 
+                # Step 1: Count song occurrences
+                counts = df['random_song_chosen'].value_counts()
+
+                # Step 2: Create a mapping of song → rank
+                ranked = counts.rank(method='min', ascending=False).astype(int)
+                total_songs = len(counts)
+
+                # Step 3: Map each song to its popularity string
+                popularity_map = {
+                    song: f"{ranked[song]}/{total_songs}"
+                    for song in counts.index
+                }
+
+                # Step 4: Create the new column
+                df['song_popularity'] = df['random_song_chosen'].map(popularity_map)
+
+                # Step 1: Count how often each song appears
+                times_played_counts = df['random_song_chosen'].value_counts()
+
+                # Step 2: Map those counts to a new column
+                df['times_played'] = df['random_song_chosen'].map(times_played_counts)
+
                 topcorrectsongs = df[df["correct_guess"] == True]["random_song_chosen"].mode().tolist()
                 account_screen.ids.topcorrectsongs.text = "Top Song(s) Guessed Correctly:" + "\n".join(topcorrectsongs)
                 print("; ".join(topcorrectsongs))
@@ -242,8 +381,20 @@ class MainScreen(Screen):
                 account_screen.ids.averagescoreoverall.text = f"Average Score (Overall): {averagescoreoverall}"
                 print(averagescoreoverall)
 
+              
+
                 # Display the DataFrame
                 print(df)
+
+                self.gridlayouttable = account_screen.ids.gridlayouttable
+                # Using iterrows to iterate through rows
+                for index, row in df.iterrows():
+                    columns = ['timestamp', 'tempo', 'key', 'level_of_difficulty', 'random_song_chosen', 'user_guess', 'user_score',
+                               'correct_guess', 'song_popularity', 'times_played']
+                    for col in columns:
+                        print(f"Index: {index}, {col}: {row[col]}")
+                        self.gridlayouttable.add_widget(Label(text=str(row[col]), size_hint_y=None, height=20))
+                
 
             os.chdir("..")
         except Exception as e:
@@ -257,7 +408,7 @@ class MainScreen(Screen):
         for char in relevant_chars:
             self.new_playlist_name.text = self.new_playlist_name.text.replace(char, '')
 
-        if self.new_playlist_name != "":
+        if self.new_playlist_name.text != "":
             tmp_dir = os.getcwd()
             try:
                 os.chdir("songs")
@@ -274,15 +425,36 @@ class MainScreen(Screen):
         for char in relevant_chars:
             self.deleted_playlist_name.text = self.deleted_playlist_name.text.replace(char, '')
 
-        if self.deleted_playlist_name != "":
+        if self.deleted_playlist_name.text != "":
             tmp_dir = os.getcwd()
             try:
                 os.chdir("songs")
-                os.rmdir(self.deleted_playlist_name.text)
+                # os.rmdir(self.deleted_playlist_name.text)
+                shutil.rmtree(self.deleted_playlist_name.text)
                 os.chdir("..")
             except Exception as e:
                 print(f"Error: {e}")
                 os.chdir(tmp_dir)
+                content = BoxLayout(orientation='vertical')
+                popup = Popup(title='ERROR', 
+                            content=content)
+                scroll_error_1 = ScrollView(size_hint=(1, 0.8))
+                scroll_error_1.add_widget(WrappedLabel(text = f"Unable to remove playlist.\nPlease ensure that playlist exists before deleting.", size_hint=(1, None)))
+                content.add_widget(scroll_error_1)
+                error_btn_1 = Button(text='OK', on_press=popup.dismiss, size_hint_y=0.2)
+                content.add_widget(error_btn_1)
+                popup.open()
+
+        else:
+            content = BoxLayout(orientation='vertical')
+            popup = Popup(title='ERROR', 
+                        content=content)
+            scroll_error_1 = ScrollView(size_hint=(1, 0.8))
+            scroll_error_1.add_widget(WrappedLabel(text = f"Unable to remove playlist.\nPlease ensure that playlist exists before deleting.", size_hint=(1, None)))
+            content.add_widget(scroll_error_1)
+            error_btn_1 = Button(text='OK', on_press=popup.dismiss, size_hint_y=0.2)
+            content.add_widget(error_btn_1)
+            popup.open()
 
     def toggle_view_playlist(self):
         self.ids.view_playlist.disabled = False
@@ -298,6 +470,11 @@ class MainScreen(Screen):
             self.ids.slider1.disabled = True
             self.ids.slider2.value = 0
             self.ids.slider2.disabled = True
+            tmp_song_dir = os.path.join(home_app_dir, 'songs', self.ids.dropdown.text)
+            list_songs = [song for song in os.listdir(tmp_song_dir) if song != 'temp.wav' or song != 'temp_original.wav']
+            if list_songs == []:
+                self.ids.playbtn.disabled = True
+
         elif self.ids.dropdown.text == "Add Playlist":
             content = BoxLayout(orientation='vertical')
             popup = Popup(title='Enter Playlist Name', 
@@ -327,13 +504,19 @@ class MainScreen(Screen):
             content.add_widget(error_btn_1)
             popup.open()
         else:
-            self.ids.sliderA.disabled = False
-            self.ids.slider1.disabled = False
-            self.ids.slider2.disabled = False
+            if self.ids.sliderA.disabled:
+                self.ids.sliderA.disabled = False
+            if self.ids.slider1.disabled:
+                self.ids.slider1.disabled = False
+            if self.ids.slider2.disabled:
+                self.ids.slider2.disabled = False
+            tmp_song_dir = os.path.join(home_app_dir, 'songs', self.ids.dropdown.text)
+            list_songs = [song for song in os.listdir(tmp_song_dir) if song != 'temp.wav' or song != 'temp_original.wav']
+            if list_songs == []:
+                self.ids.playbtn.disabled = True
+
         
     def play_random_song(self):
-        # Part 1
-        self.next_progress_step()
 
         print(f'Song selected: {self.song_selected}')
 
@@ -343,6 +526,21 @@ class MainScreen(Screen):
         self.ids.slider2.disabled = True
 
         if self.song_selected == False:
+            try:
+                self.loading_popup = None
+            except Exception as e:
+                print(f"Could not unload self.loading_popup. Error: {e}")
+
+            
+            self.loading_popup = AnimatedPopup()
+            self.loading_popup.open()
+
+
+            # anim_img = Image(source='Loading.gif', anim_delay=0.05)
+            # self.loading_popup = Popup(title='Loading Song', content=anim_img, size_hint=(0.6, 0.6))
+            # self.loading_popup.open()
+
+            
             # Reset sound variable
             try:
                 self.sound.unload()
@@ -355,7 +553,7 @@ class MainScreen(Screen):
             self.ids.dropdown.disabled = True
             self.ids.view_playlist.disabled = True
             # self.ids.pausebtn.disabled = False
-            # self.ids.restartbtn.disabled = False
+            self.ids.restartbtn.disabled = True
             dropdown_text = self.ids.dropdown.text
             dropdown_text = dropdown_text.replace(' ', '')
 
@@ -400,6 +598,39 @@ class MainScreen(Screen):
             self.next_progress_step()
             os.chdir(dropdown_text)
             list_songs = [song for song in os.listdir() if song != 'temp.wav' or song != 'temp_original.wav']
+
+            if list_songs == []:
+                content = BoxLayout(orientation='vertical')
+                popup = Popup(title='ERROR', 
+                            content=content)
+                scroll_error_1 = ScrollView(size_hint=(1, 0.8))
+                scroll_error_1.add_widget(WrappedLabel(text = f"No song available.\nTry to add a song first.", size_hint=(1, None)))
+                content.add_widget(scroll_error_1)
+                error_btn_1 = Button(text='OK', on_press=popup.dismiss, size_hint_y=0.2)
+                content.add_widget(error_btn_1)
+                popup.open()
+                self.cap_percentage = 100
+
+                # Reset after exception occurs
+                self.ids.playbtn.disabled = False
+                self.ids.submitbtn.disabled = True
+                self.ids.sliderA.disabled = False
+                self.ids.slider1.disabled = False
+                self.ids.slider2.disabled = False
+                self.ids.sliderA.disabled = False
+                self.ids.dropdown.disabled = False
+                self.ids.view_playlist.disabled = False
+
+                # self.ids.status_label.text = "0"
+                # self.ids.progress.value = 0
+                # self.ids.status_label.opacity = 0.0
+                # self.ids.progress.opacity = 0.0
+                self.ids.dropdown.disabled = False
+                self.ids.view_playlist.disabled = False
+                os.chdir('..')
+                os.chdir('..')
+                return
+
             random_song = randint(0, len(list_songs) - 1)
             print(f'Song: {list_songs[random_song]}')
             print(f'Tempo: {self.ids.slider1.value}')
@@ -407,8 +638,14 @@ class MainScreen(Screen):
             print(f'Level of difficulty: {self.ids.slider2.value}')
 
             try:
-                # Clock.schedule_once(lambda dt: self.change_audio_properties(list_songs[random_song], f'{list_songs[random_song]}_{self.ids.slider1.value}_{self.ids.sliderA.value}_{self.ids.slider2.value}.mp3', self.ids.slider1.value, self.ids.sliderA.value, self.ids.slider2.value, True), 0.1)
-                Clock.schedule_once(lambda dt: self.change_audio_properties(list_songs[random_song], f'{list_songs[random_song]}', self.ids.slider1.value, self.ids.sliderA.value, self.ids.slider2.value), 0.1)
+                if platform == "android":
+                    # Clock.schedule_once(lambda dt: self.change_audio_properties(list_songs[random_song], f'{list_songs[random_song]}_{self.ids.slider1.value}_{self.ids.sliderA.value}_{self.ids.slider2.value}.mp3', self.ids.slider1.value, self.ids.sliderA.value, self.ids.slider2.value, True), 0.1)
+                    Clock.schedule_once(lambda dt: self.change_audio_properties(list_songs[random_song], f'{list_songs[random_song]}', self.ids.slider1.value, self.ids.sliderA.value, self.ids.slider2.value), 0.1)
+                else:
+                    import threading
+                    if not self.processing:
+                        self.processing = True
+                        threading.Thread(target=self.change_audio_properties, args=[list_songs[random_song], f'{list_songs[random_song]}', self.ids.slider1.value, self.ids.sliderA.value, self.ids.slider2.value]).start()
             except Exception as e:
                 content = BoxLayout(orientation='vertical')
                 popup = Popup(title='ERROR', 
@@ -638,82 +875,168 @@ class MainScreen(Screen):
         ).astype(y.dtype)
 
         return y_shifted
+    
+    def detect_pitch_autocorr(self, y, sr, fmin=80, fmax=1500):
+        """Return fundamental freq via autocorrelation in y."""
+        # full autocorr, then keep positive lags
+        corr = np.correlate(y, y, mode='full')
+        corr = corr[corr.size//2:]
+        # lag bounds
+        min_lag = int(sr / fmax)
+        max_lag = int(sr / fmin)
+        if max_lag >= len(corr):
+            max_lag = len(corr)-1
+        segment = corr[min_lag:max_lag]
+        if segment.size == 0:
+            return 0
+        lag = segment.argmax() + min_lag
+        return sr/lag if lag>0 else 0
+    
+    def safe_read(self, reader, buffer):
+        temp = np.zeros(buffer.shape, dtype=buffer.dtype)
+        n = reader.read(temp)
+        if n < buffer.shape[1]:
+            # Already padded with zeros
+            return n
+        elif n > buffer.shape[1]:
+            # Truncate
+            temp = temp[:, :buffer.shape[1]]
+            np.copyto(buffer, temp)
+            return buffer.shape[1]
+        else:
+            np.copyto(buffer, temp)
+            return n
 
     def change_audio_properties(
         self, audio_path, output_path,
         tempo_factor=1.0, pitch_semitones=0, remove_pitch_count=0
     ):
+        tmp_dir = os.getcwd()
+        tmp2 = "temp.wav"
         y, sr = sf.read(audio_path)
-        self.next_progress_step()
-
-        if y.ndim > 1:
-            y = y.mean(axis=1)
-
-        # Apply pitch shift
-        # y = self.pitch_shift(y, pitch_semitones)
-        # Apply tempo stretch
-        # y = self.time_stretch(y, tempo_factor)
 
         # Pitch classes to remove
         removal_order = [8, 10, 3, 6, 1, 4, 7, 9, 11, 0, 2, 5]
         print(remove_pitch_count)
         removal = set(removal_order[:int(remove_pitch_count)])
-        self.next_progress_step()
 
-        # Frame-by-frame pitch detect & shush
-        win, hop = 2048, 512
-        out = y.copy()
-        self.next_progress_step()
-        for i in range(0, len(y) - win, hop):
-            pc = self.estimate_pitch_class(y[i:i+win], sr)
-            if pc is not None and pc in removal:
-                out[i:i+hop] = self.generate_shush(hop)
+        # pick which pitch‐classes to remove: 0=C, 1=C#, … 5=F, 7=G, … 11=B
+        # e.g. remove F (5) and G (7) below
+        # remove_notes = [5, 7]
 
-        # Part 2
-        self.next_progress_step()
+        # === Step 1: Load audio & raw samples ===
+        audio    = AudioSegment.from_file(audio_path, format='mp3')
+        sr       = audio.frame_rate
+        channels = audio.channels
+        sw       = audio.sample_width
 
-        # temp_wav = "temp.wav"
-        # sf.write(temp_wav, out, sr)
-        # AudioSegment.from_wav(temp_wav).export(output_path, format="mp3")
+        # to mono float32 in [-1,1]
+        raw = np.array(audio.get_array_of_samples())
+        if channels > 1:
+            raw = raw.reshape(-1, channels).mean(axis=1)
+        max_val = float(1 << (8*sw - 1))
+        samples = raw.astype(np.float32) / max_val
 
-        # 6) Write final WAV and convert to MP3
-        tmp2 = "temp.wav"
-        sf.write(tmp2, out, sr)
-        chosen_uuid = uuid.uuid4()
+        # === Step 2: Onset detection via energy diff ===
+        frame_size = 2048
+        hop_size   = 512
+        n_frames   = 1 + (len(samples) - frame_size) // hop_size
 
-        # Part 3
-        self.next_progress_step()
+        # compute energies
+        energies = np.empty(n_frames, dtype=np.float32)
+        for i in range(n_frames):
+            start = i * hop_size
+            frame = samples[start:start+frame_size]
+            energies[i] = np.sum(frame*frame)
+
+        # positive diffs and threshold
+        diff      = np.diff(energies)
+        diff[diff < 0] = 0
+        threshold = diff.mean() * 4
+        onsets   = np.where(diff > threshold)[0] + 1
+
+        # convert to sample indices and build segments
+        onset_samples = (onsets * hop_size).astype(int)
+        segments = []
+        for i, s in enumerate(onset_samples):
+            e = onset_samples[i+1] if i+1 < len(onset_samples) else len(samples)
+            segments.append((s, e))
+
+        try:
+            os.chdir("..")
+            os.chdir("..")
+            clap   = AudioSegment.from_file(self.CLAP_WAV_PATH, format='wav')
+            out  = audio[:]  # copy
+            os.chdir(tmp_dir)
+        except Exception as e:
+            print(f"Error: {e}")
+            os.chdir(tmp_dir)
+
+        for start_s, end_s in segments:
+            frame = samples[start_s:end_s]
+            # skip too-short
+            if len(frame) < frame_size//2:
+                continue
+            freq = self.detect_pitch_autocorr(frame, sr)
+            if freq <= 0:
+                continue
+
+            # midi number and pitch‐class
+            midi = 69 + 12 * math.log2(freq/440.0)
+            pc   = int(round(midi)) % 12
+
+            if pc in removal:
+                # compute ms positions
+                start_ms = int(1000 * start_s / sr)
+                end_ms   = int(1000 * end_s   / sr)
+                # mute original segment
+                sil = AudioSegment.silent(duration=(end_ms - start_ms))
+                out = out[:start_ms] + sil + out[end_ms:]
+                # overlay clap at segment start
+                out = out.overlay(clap, position=start_ms)
+        
+        # === Step 5: Export ===
+        # Convert to mono
+        out_final = out.set_channels(1)
+        out_final.export("temp.wav", format='wav')
+        AudioSegment.from_wav(tmp2).export(tmp2, format="wav", parameters=["-acodec", "pcm_s16le"])
 
         # Change tempo of song if necessary
         if tempo_factor != 1.0:
             shutil.copy('temp.wav', 'temp_original.wav')
-            from audiotsm import phasevocoder
-            from audiotsm.io.wav import WavReader, WavWriter
-
+            
             input_path = 'temp_original.wav'
             output_path = "temp.wav"
 
-            with WavReader(input_path) as reader:
-                with WavWriter(output_path, reader.channels, reader.samplerate) as writer:
-                    tsm = phasevocoder(reader.channels, speed=tempo_factor)
-                    tsm.run(reader, writer)
+            # Attempt 1: Set frame_length to 2048, as it's the "larger" shape in the error
+            # This assumes the reader is providing 2048 samples, and audiotsm needs to match that.
+            try:
+                print(f"Attempting with frame_length = 2048...")
+                with WavReader(input_path) as reader:
+                    with WavWriter(output_path, reader.channels, reader.samplerate) as writer:
+                        tsm = phasevocoder(reader.channels, speed=tempo_factor, frame_length=2048)
+                        tsm.run(reader, writer)
+                print("Processing successful with frame_length = 2048")
 
+            except ValueError as e:
+                print(f"Error with frame_length = 2048: {e}")
+                # If the above fails, try the other value from the error message.
+                # Attempt 2: Set frame_length to 1024
+                print(f"Attempting with frame_length = 1024...")
+                try:
+                    with WavReader(input_path) as reader:
+                        with WavWriter(output_path, reader.channels, reader.samplerate) as writer:
+                            tsm = phasevocoder(reader.channels, speed=tempo_factor, frame_length=1024)
+                            tsm.run(reader, writer)
+                    print("Processing successful with frame_length = 1024")
+                except ValueError as e_inner:
+                    print(f"Error with frame_length = 1024: {e_inner}")
+                    print("Neither 1024 nor 2048 worked directly as frame_length.")
+                    print("The issue might be more nuanced or related to the WavReader's internal buffering.")
 
             # Check if the file exists before attempting to remove it
             if os.path.exists(input_path):
                 os.remove(input_path)
-
-        # Part 4
-        self.next_progress_step()
-
-        # # Change pitch of song if necessary
-        # if pitch_semitones != 0.0:
-        #     input_path = 'temp_original.wav'
-        #     shutil.copy(tmp2, input_path)
-        #     self.pitch_shift(input_path, tmp2, semitone_shift=int(pitch_semitones))
-        #     # Check if the file exists before attempting to remove it
-        #     if os.path.exists(input_path):
-        #         os.remove(input_path)
 
         if pitch_semitones != 0.0:
             shutil.copy('temp.wav', 'temp_original.wav')
@@ -800,6 +1123,8 @@ class MainScreen(Screen):
         print(f"tmp2: {tmp2}")
         print(f"os.getcwd() -> {os.getcwd()}")
 
+        
+        self.loading_popup.dismiss()
         if platform == "android":
             print("Before calling: play_aac_file")
             self.play_aac_file(f"{os.getcwd()}/{tmp2}")
@@ -1078,6 +1403,7 @@ class UploadScreen(Screen):
             self.ids.filechooserlabel.text = "Invalid file. Please ensure an MP3 file is selected."
 
 class ScoreScreen(Screen):
+    is_android = BooleanProperty(platform == 'android')
     def getscore(self):
         main_screen = self.manager.get_screen("main")
         guess_input_text = main_screen.ids.guess_input.text
@@ -1109,10 +1435,7 @@ class ScoreScreen(Screen):
 
         user_log = {'timestamp':datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S"), 'tempo': main_screen.ids.slider1.value, 'key': main_screen.ids.sliderA.value, 
       'level_of_difficulty': main_screen.ids.slider2.value, 
-        #   'browser_information': navigator.userAgent,
-        #   'user_language': navigator.language, 
       'random_song_chosen': title_text, 
-        #   'random_song_chosen_number': randomSongChosenNumber, 
       'user_guess':guess_input_text,
       'user_score': similarity_score}
         print("User log: ")
@@ -1145,12 +1468,18 @@ class ScoreScreen(Screen):
         main_screen.ids.sliderA.disabled = False
         main_screen.ids.slider1.disabled = False
         main_screen.ids.slider2.disabled = False
-        main_screen.ids.status_label.text = "0"
-        main_screen.ids.progress.value = 0
-        main_screen.ids.status_label.opacity = 0.0
-        main_screen.ids.progress.opacity = 0.0
+        # main_screen.ids.status_label.text = "0"
+        # main_screen.ids.progress.value = 0
+        # main_screen.ids.status_label.opacity = 0.0
+        # main_screen.ids.progress.opacity = 0.0
         main_screen.ids.dropdown.disabled = False
         main_screen.ids.view_playlist.disabled = False
+
+    def restart_app(self):
+        import sys
+        # Restart the script
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
 
 class AccountScreen(Screen):
     def pass_this(self):
