@@ -16,8 +16,6 @@ from kivy.uix.video import Video
 from kivy.uix.image import Image
 
 
-
-
 import shutil
 from random import randint
 import librosa
@@ -108,8 +106,35 @@ if platform == "android":
         return ffprobe_path
     import pydub.utils
     pydub.utils.get_prober_name = custom_prober
+elif platform == "macosx":
+    from os import chmod
+    # Prefer a bundled ffprobe, but fall back to the system `ffprobe` if the bundled
+    # binary is missing or not runnable (e.g. wrong architecture/format).
+    ffprobe_asset = os.path.join(home_app_dir, "assets", "ffprobe").replace("\\", "/")
+    ffprobe_path = ffprobe_asset
+    print(ffprobe_path)
+    try:
+        # Try to make the asset executable if it exists
+        os.chmod(ffprobe_path, os.stat(ffprobe_path).st_mode | stat.S_IEXEC)
+        # Verify the bundled binary is runnable by calling `-version`.
+        try:
+            proc = subprocess.run([ffprobe_path, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
+            if proc.returncode != 0:
+                raise OSError('bundled ffprobe returned non-zero')
+        except Exception:
+            print('Bundled ffprobe not runnable; falling back to system ffprobe in PATH')
+            ffprobe_path = 'ffprobe'
+    except FileNotFoundError:
+        print('Bundled ffprobe not found; using system ffprobe')
+        ffprobe_path = 'ffprobe'
 
-
+    # Patch pydub to use the selected ffprobe
+    from pydub.utils import get_prober_name
+    def custom_prober():
+        return ffprobe_path
+    import pydub.utils
+    pydub.utils.get_prober_name = custom_prober
+    
 
 import soundfile as sf
 
@@ -126,7 +151,7 @@ class AnimatedPopup:
         self.frame_index = 0
         self.anim_delay = 0.25 / 10.0  # 10 FPS
 
-        if platform == "win":
+        if platform == "win" or platform == "macosx":
             # FIXED: use forward slashes in paths for Kivy
             self.frames = sorted([
                 os.path.join(home_app_dir, 'anim_frames', fname).replace("\\", "/")  # <-- key fix
@@ -136,6 +161,7 @@ class AnimatedPopup:
             # print(self.frames)
         else:
             # Load all valid frame paths
+            print(os.getcwd())
             self.frames = sorted([
                 os.path.join('anim_frames', fname)
                 for fname in os.listdir('anim_frames')
@@ -206,8 +232,15 @@ class MainScreen(Screen):
         # super().__init__(**kw)
         super(MainScreen, self).__init__()
         # self.ids.dropdown.values = os.listdir("songs")
-        self.update_spinner_values(os.listdir("songs"))
-        print(f"Dropdown values: {self.ids.dropdown.values}")
+        if platform == 'macosx':
+            song_folders = os.listdir("songs")
+            if '.DS_Store' in song_folders:
+                song_folders.remove('.DS_Store')
+                self.update_spinner_values(song_folders)
+                print(f"Dropdown values: {self.ids.dropdown.values}")
+        else:
+            self.update_spinner_values(os.listdir("songs"))
+            print(f"Dropdown values: {self.ids.dropdown.values}")
         print(platform)
 
 
@@ -229,7 +262,13 @@ class MainScreen(Screen):
         self.ids.dropdown.values = new_values
 
     def get_spinner_values(self):
-        return os.listdir("songs") + ["Add Playlist", "Remove Playlist"]
+        if platform == 'macosx':
+            song_folders = os.listdir("songs")
+            if '.DS_Store' in song_folders:
+                song_folders.remove('.DS_Store')
+            return song_folders + ["Add Playlist", "Remove Playlist"]
+        else:
+            return os.listdir("songs") + ["Add Playlist", "Remove Playlist"]
 
     def toggle_video(self):
         if platform != "android": 
@@ -578,6 +617,10 @@ class MainScreen(Screen):
                     # Add "Add Playlist" & "Remove Playlist" options to "Playlist Options"
                     for directory in music_dirs:
                         try:
+                            # Skip over '.DS_Store' directory
+                            if directory == '.DS_Store':
+                                continue
+
                             os.chdir(directory)
                         except Exception as e:
                             print(f"Directory does not exist. Creating it now: {e}")
@@ -1129,6 +1172,12 @@ class MainScreen(Screen):
             print("Before calling: play_aac_file")
             self.play_aac_file(f"{os.getcwd()}/{tmp2}")
             print("After calling: play_aac_file")
+        elif platform == "macosx":
+            print("Before calling: self.sound = SoundLoader.load(tmp2)")
+            self.sound = SoundLoader.load(f"{os.getcwd()}/{tmp2}")
+            print("After calling: self.sound = SoundLoader.load(tmp2)")
+            self.sound.play()
+            self.sound.bind(on_stop=self.on_song_end)
         else:      
             print("Before calling: self.sound = SoundLoader.load(tmp2)")
             self.sound = SoundLoader.load(f"{os.getcwd()}\\{tmp2}")
