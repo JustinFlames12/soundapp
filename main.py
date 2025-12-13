@@ -22,8 +22,6 @@ import librosa
 import numpy as np
 # from aubio import pitch
 import subprocess
-
-from pydub import AudioSegment
 import wave
 # import pyaudio
 import random
@@ -32,6 +30,26 @@ import datetime
 import json
 import uuid
 from kivy.utils import platform
+
+# # Ensure a writable working directory on iOS (app bundle is read-only).
+# # Use the user's Documents folder as the app's working dir so the app can
+# # create/read 'data', 'songs', and other runtime files without PermissionError.
+# if platform == "ios":
+#     try:
+#         ios_base = os.path.expanduser('~/Documents')
+#         os.makedirs(ios_base, exist_ok=True)
+#         os.chdir(ios_base)
+#         home_app_dir = ios_base
+#         print("iOS: changed working directory to", home_app_dir)
+#     except Exception as e:
+#         print("iOS: failed to change working directory:", e)
+#         home_app_dir = os.getcwd()
+# else:
+#     home_app_dir = os.getcwd()
+
+# Conditionally import pydub (not available on iOS due to subprocess restrictions)
+if platform != "ios":
+    from pydub import AudioSegment
 from plyer import filechooser, audio
 # from audiostream.core import AudioSample
 # from ffpyplayer.player import MediaPlayer
@@ -39,10 +57,15 @@ from kivy.core.audio import SoundLoader
 from kivy.uix.progressbar import ProgressBar
 import time
 # import psutil
-import pandas as pd
 import math
 import re
 import stat
+from collections import Counter
+from statistics import mode as stat_mode
+
+# Conditionally import pandas (not available on iOS due to C-extension failures)
+if platform != "ios":
+    import pandas as pd
 
 if platform == "android":
     from android.storage import app_storage_path
@@ -135,8 +158,12 @@ elif platform == "macosx":
     import pydub.utils
     pydub.utils.get_prober_name = custom_prober
     
-
-import soundfile as sf
+# Conditionally import soundfile (libsndfile/CFFI not available on iOS)
+# On iOS we skip importing soundfile to avoid runtime C-extension errors.
+if platform != "ios":
+    import soundfile as sf
+else:
+    sf = None
 
 from audiotsm import phasevocoder
 from audiotsm.io.wav import WavReader, WavWriter
@@ -343,6 +370,18 @@ class MainScreen(Screen):
             account_screen.ids.usernametext.text = json_data["username"]
         except Exception as e:
             print(f"Unable to pull up saved username. Error: {e}")
+
+        # iOS doesn't support pandas due to C-extension compilation issues
+        if platform == "ios":
+            print("iOS detected: Skipping pandas-based statistics (C-extension unavailable)")
+            # Set default/empty values for account statistics on iOS
+            account_screen.ids.topcorrectsongs.text = "Top Song(s) Guessed Correctly: N/A"
+            account_screen.ids.topincorrectsongs.text = "Top Song(s) Guessed Incorrectly: N/A"
+            account_screen.ids.mostcommonkey.text = "Most Commonly Used Key Signature(s): N/A"
+            account_screen.ids.mostcommontempo.text = "Most Commonly Used Tempo(s): N/A"
+            account_screen.ids.mostcommonlod.text = "Most Commonly Used Level Of Difficulty(ies): N/A"
+            account_screen.ids.averagescoreoverall.text = "Average Score (Overall): N/A"
+            return
 
         tmp_dir = os.getcwd()
         try:
@@ -956,6 +995,47 @@ class MainScreen(Screen):
     ):
         tmp_dir = os.getcwd()
         tmp2 = "temp.wav"
+        
+        # iOS handling: skip complex audio processing due to subprocess limitations
+        if platform == "ios":
+            print("iOS detected: Using simplified audio playback (no processing)")
+            self.loading_popup.dismiss()
+            # Directly load and play the original audio file using SoundLoader
+            try:
+                audio_file_path = os.path.join(os.getcwd(), audio_path)
+                self.sound = SoundLoader.load(audio_file_path)
+                if self.sound:
+                    self.sound.play()
+                    self.sound.bind(on_stop=self.on_song_end)
+                    self.song_selected = True
+                    self.ids.playbtn.disabled = True
+                    self.ids.pausebtn.disabled = False
+                    self.ids.restartbtn.disabled = False
+                    self.ids.submitbtn.disabled = False
+                else:
+                    raise Exception("Failed to load audio file")
+            except Exception as e:
+                print(f"Error loading audio on iOS: {e}")
+                content = BoxLayout(orientation='vertical')
+                popup = Popup(title='ERROR', content=content)
+                scroll_error = ScrollView(size_hint=(1, 0.8))
+                scroll_error.add_widget(WrappedLabel(text=f"Unable to play song on iOS.\nError: {e}", size_hint=(1, None)))
+                content.add_widget(scroll_error)
+                error_btn = Button(text='OK', on_press=popup.dismiss, size_hint_y=0.2)
+                content.add_widget(error_btn)
+                popup.open()
+                self.ids.playbtn.disabled = False
+                self.ids.submitbtn.disabled = True
+                self.ids.sliderA.disabled = False
+                self.ids.slider1.disabled = False
+                self.ids.slider2.disabled = False
+                self.ids.dropdown.disabled = False
+                self.ids.view_playlist.disabled = False
+            finally:
+                os.chdir('..')
+                os.chdir('..')
+            return
+        
         y, sr = sf.read(audio_path)
 
         # Pitch classes to remove
@@ -1172,6 +1252,12 @@ class MainScreen(Screen):
             print("Before calling: play_aac_file")
             self.play_aac_file(f"{os.getcwd()}/{tmp2}")
             print("After calling: play_aac_file")
+        elif platform == "ios":
+            print("Before calling: self.sound = SoundLoader.load(tmp2) [iOS]")
+            self.sound = SoundLoader.load(f"{os.getcwd()}/{tmp2}")
+            print("After calling: self.sound = SoundLoader.load(tmp2) [iOS]")
+            self.sound.play()
+            self.sound.bind(on_stop=self.on_song_end)
         elif platform == "macosx":
             print("Before calling: self.sound = SoundLoader.load(tmp2)")
             self.sound = SoundLoader.load(f"{os.getcwd()}/{tmp2}")
