@@ -1,5 +1,6 @@
 import os
 home_app_dir = os.getcwd()
+# home_app_dir = None
 os.environ["KIVY_VIDEO"] = "ffpyplayer"
 
 from kivy.app import App
@@ -488,13 +489,24 @@ class MainScreen(Screen):
 
         if self.new_playlist_name.text != "":
             tmp_dir = os.getcwd()
-            try:
-                os.chdir("songs")
-                os.mkdir(self.new_playlist_name.text)
-                os.chdir("..")
-            except Exception as e:
-                print(f"Error: {e}")
-                os.chdir(tmp_dir)
+            if platform == "ios":
+                try:
+                    from plyer import storagepath
+                    documents_path = storagepath.get_documents_dir()
+                    os.chdir("songs")
+                    os.mkdir(self.new_playlist_name.text)
+                    os.chdir("..")
+                except Exception as e:
+                    print(f"Error: {e}")
+                    os.chdir(tmp_dir)
+            else:
+                try:
+                    os.chdir("songs")
+                    os.mkdir(self.new_playlist_name.text)
+                    os.chdir("..")
+                except Exception as e:
+                    print(f"Error: {e}")
+                    os.chdir(tmp_dir)
 
     def delete_playlist(self):
         # Remove periods, spaces, and special characters from playlist name
@@ -1592,6 +1604,18 @@ class ScoreScreen(Screen):
             except Exception as e:
                 print(f"Error: {e}")
                 os.chdir(tmp_directory)
+        elif platform == "ios":
+            try:
+                from plyer import storagepath
+                documents_path = storagepath.get_documents_dir()
+                data_path = os.path.join(documents_path, "data")
+                if not os.path.exists(data_path):
+                    os.makedirs(data_path)
+                # Write dictionary to a JSON file
+                with open(os.path.join(data_path, f"{user_log['timestamp']}_{uuid.uuid4()}.json"), "w") as json_file:
+                    json.dump(user_log, json_file, indent=4)  # 'indent' makes the JSON file 
+            except Exception as e:
+                print(f"Error writing user log on iOS: {e}")
         else:
             # Write dictionary to a JSON file
             with open(f".\\data\\{user_log['timestamp']}_{uuid.uuid4()}.json", "w") as json_file:
@@ -1665,31 +1689,73 @@ class GuessThatSongApp(App):
     def change_theme(self, r, g, b, opacity):
         self.background_color = [r/255, g/255, b/255, opacity]
         background_color = self.background_color
-        if "user_account.json" not in os.listdir():
-            json_data = {"background_color": self.background_color}
-            with open('user_account.json', 'w') as f:
-                json.dump(json_data, f)
+        if platform == "ios":
+            try:
+                from plyer import storagepath
+                documents_path = storagepath.get_documents_dir()
+                if "user_account.json" not in os.listdir():
+                    json_data = {"background_color": self.background_color}
+                    # Write dictionary to a JSON file
+                    with open(os.path.join(documents_path, 'user_account.json'), "w") as json_file:
+                        json.dump(json_data, f)
+                else:
+                    with open(os.path.join(documents_path, 'user_account.json'), 'r') as f:
+                        # Loading the json data into a python object
+                        json_data = json.load(f)
+                    json_data["background_color"] = self.background_color
+                    with open(os.path.join(documents_path, 'user_account.json'), 'w') as f:
+                        json.dump(json_data, f)
+            except Exception as e:
+                print(f"Error writing user account file on iOS: {e}")
         else:
-            with open('user_account.json', 'r') as f:
-                # Loading the json data into a python object
-                json_data = json.load(f)
-            json_data["background_color"] = self.background_color
-            with open('user_account.json', 'w') as f:
-                json.dump(json_data, f)
+            if "user_account.json" not in os.listdir():
+                json_data = {"background_color": self.background_color}
+                with open('user_account.json', 'w') as f:
+                    json.dump(json_data, f)
+            else:
+                with open('user_account.json', 'r') as f:
+                    # Loading the json data into a python object
+                    json_data = json.load(f)
+                json_data["background_color"] = self.background_color
+                with open('user_account.json', 'w') as f:
+                    json.dump(json_data, f)
 
     def change_username(self, username):
-        if "user_account.json" not in os.listdir():
-            json_data = {"username": username}
-            with open('user_account.json', 'w') as f:
-                json.dump(json_data, f)
+        if platform == "ios":
+            try:
+                from plyer import storagepath
+                documents_path = storagepath.get_documents_dir()
+                if "user_account.json" not in os.listdir():
+                    json_data = {"username": username}
+                    # Write dictionary to a JSON file
+                    # with open(os.path.join(documents_path, 'user_account.json'), "w") as json_file:
+                    #     json.dump(json_data, f)
+                    with open('user_account.json', 'w') as f:
+                        json.dump(json_data, f)
+                else:
+                    # with open(os.path.join(documents_path, 'user_account.json'), 'r') as f:
+                    with open('user_account.json', 'w') as f:
+                        # Loading the json data into a python object
+                        json_data = json.load(f)
+                    json_data["username"] = username
+                    # with open(os.path.join(documents_path, 'user_account.json'), 'w') as f:
+                    with open('user_account.json', 'w') as f:
+                        json.dump(json_data, f)
+            except Exception as e:
+                print(f"Error writing user account file on iOS: {e}")
         else:
-            with open('user_account.json', 'r') as f:
-                # Loading the json data into a python object
-                json_data = json.load(f)
-            json_data["username"] = username
-            with open('user_account.json', 'w') as f:
-                json.dump(json_data, f)
-            
+            if "user_account.json" not in os.listdir():
+                json_data = {"username": username}
+                with open('user_account.json', 'w') as f:
+                    json.dump(json_data, f)
+            else:
+                with open('user_account.json', 'r') as f:
+                    # Loading the json data into a python object
+                    json_data = json.load(f)
+                json_data["username"] = username
+                with open('user_account.json', 'w') as f:
+                    json.dump(json_data, f)
+                    
     def build(self):
         print(platform)
         return MyScreenManager()
